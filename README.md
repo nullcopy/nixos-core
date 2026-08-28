@@ -1,147 +1,114 @@
-# nixos-config
+# nixos-core
 
-Personal NixOS flake. Host configs + home-manager, keyed by machine name.
+Shared NixOS library flake. This repo defines **no machines and no users** —
+it exports reusable modules and a template for per-machine repos.
+
+## The three-repo model
+
+| Repo | Owns | Example |
+|---|---|---|
+| **nixos-core** (this repo) | Shared modules & options, machine template, install script | — |
+| **One repo per machine** | Hostname, hardware config, `core.*` toggles, user *accounts* | [nixos-wisp](https://github.com/nullcopy/nixos-wisp) |
+| **One repo per user** | That user's home environment via standalone home-manager | [nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) |
+
+Machine repos consume this repo as a flake input, so improvements flow out as
+versioned updates (`nix flake update core` in the machine repo) — never as
+git merges. Users manage their own environments from their own dotfiles
+repos; the machine only declares that their accounts exist.
 
 ## Layout
 
 ```
-flake.nix              # inputs + nixosConfigurations + devShells
-common/
-  configuration.nix    # base system (nix, locale, net, audio, base pkgs)
-  desktop.nix          # niri + greetd + xdg portals
-devShells/
-  rust.nix             # fenix toolchain + bindgen deps (see "devShells")
-  python.nix
-  go.nix
-  c.nix
-  lua.nix
-  nix.nix
-  bash.nix
-hosts/
-  wisp/                # per-machine module
-    configuration.nix  # imports hw + luks + ollama + desktop + user group
-    hardware-configuration.nix
-    luks.nix           # stage-1 systemd + FIDO2 LUKS unlock
-    ollama.nix         # ROCm ollama + GTT tuning for Strix Halo iGPU
-users/
-  nullcopy/
-    configuration.nix  # home-manager module (imports the files below)
-    aliases.nix        # zsh + oh-my-zsh-style git aliases
-    neovim.nix         # nixvim config (AstroNvim-flavoured UX)
-    niri.nix           # niri keybindings wired to Noctalia IPC
-    opencode.nix       # opencode pointed at the local ollama service
-    tailscale.nix      # per-user `tailscale up` service
-    noctalia-settings.toml # tracked noctalia UI settings (see "Noctalia")
+flake.nix            # exports nixosModules.default and templates.machine
+modules/
+  default.nix        # entry point — machine flakes import this
+  base.nix           # always-on baseline (nix, gc, net, resolved, base pkgs), all mkDefault
+  desktop.nix        # core.desktop.enable — niri + greetd + portals + audio + bluetooth
+  fde.nix            # mandatory-FDE assertion + core.fde.fido2 YubiKey boot unlock
+  tailscale.nix      # core.tailscale.enable — daemon only; manual `sudo tailscale up`
+  nymvpn.nix         # core.nymvpn.enable — packaged nym-vpnd/vpnc + polkit + boot autoconnect
+templates/
+  machine/           # scaffold for a new machine repo
+docs/
+  new-machine.md     # full walkthrough: machine repo -> install -> users
+  fde.md             # disk-unlock management: passphrases, YubiKeys, token-only
+scripts/
+  nixos-install.sh   # disk partitioning + install for a new machine
 ```
 
-Inputs: `nixpkgs` (unstable), `home-manager`, `noctalia`, `nixvim`, `fenix`.
+(Dev shells are a user-space concern and live in each user's dotfiles repo,
+e.g. `nix develop github:nullcopy/dotfiles#rust`.)
 
-## First-time setup on a new machine
+## Options
 
-Machine configs are organized by host name, so pick a `<name>` (e.g. `wisp`) and follow the steps below.
+Everything opinionated is either overridable (opinionated values in
+`base.nix` carry `lib.mkDefault`, so a machine config can override them
+without `mkForce`; list options like `environment.systemPackages` merge) or
+off until the machine enables it:
 
-### Install NixOS and configure the system with this flake.
+- `core.desktop.enable` — full graphical stack: niri, greetd/tuigreet, XDG
+  portals, pipewire audio, bluetooth, power management, noctalia companion
+  tools. Leave off for servers.
+- `core.fde.*` — full-disk encryption is **mandatory**: the build fails if
+  the initrd unlocks no LUKS volume (`core.fde.allowUnencrypted` is the
+  discouraged escape hatch for throwaway VMs). Unlock methods are LUKS2
+  keyslots — passphrases and FIDO2 tokens (YubiKeys) in any combination,
+  including token-only — managed with the standard tools per
+  [docs/fde.md](docs/fde.md). `core.fde.fido2.enable` turns on token
+  unlock at boot; `core.fde.name` covers a non-default mapper name.
+- `core.nymvpn.enable` — NymVPN daemon and CLI, machine-wide: one account
+  per machine, stored daemon-side once by the admin; `nym-vpn-autoconnect`
+  then brings the tunnel up at every boot as the default route for every
+  user's traffic.
+- `core.tailscale.enable` — tailscale daemon only. The admin connects by
+  hand with `sudo tailscale up` and never with an exit node: only tailnet
+  destinations use it, everything else goes via NymVPN.
+- Localization (`time.timeZone`, `i18n.defaultLocale`) is per machine, set
+  in each machine's `configuration.nix`, not here.
 
-`scripts/nixos-install.sh` automates the full installation. Before running it, edit the four variables at the top of the script:
+## Setting up a new machine
 
-```bash
-DISK=/dev/nvme0n1               # target disk — double-check with lsblk
-FLAKE_REPO="https://github.com/nullcopy/nixos-config"
-HOSTNAME="myNewNixosComputer"   # must match nixosConfigurations.<name> in flake.nix
-ADMINUSER="myAdminUser"         # wheel-group user defined in your host config
+**Full from-scratch walkthrough: [docs/new-machine.md](docs/new-machine.md)**
+— ISO download through per-user home setup, with a complete annotated
+machine-config example, disk-unlock management (passphrases & YubiKeys), and
+[nixos-wisp](https://github.com/nullcopy/nixos-wisp) as the real-world
+reference. The short version:
+
+1. Scaffold a repo for it:
+   ```
+   nix flake init -t github:nullcopy/nixos-core#machine
+   ```
+   Replace the `MYHOSTNAME`/`MYADMIN` placeholders, set the toggles, push it.
+2. From the NixOS live ISO, download `scripts/nixos-install.sh`, edit the
+   variables at the top (`DISK`, `MACHINE_REPO`, `HOSTNAME`, `ADMINUSER`),
+   and run it as root. It partitions (GPT, EFI + LUKS2 btrfs), clones the
+   machine repo to `/home/<admin>/.nixos`, generates
+   `hardware-configuration.nix`, and runs `nixos-install`.
+3. After first boot, each user clones their own dotfiles repo and applies it
+   with standalone home-manager.
+
+## Day to day
+
+In a **machine repo** (not here):
+
+```
+sudo nixos-rebuild switch --flake ~/.nixos   # or wherever it's cloned
+nix flake update core                        # pull nixos-core improvements
+nix flake update                             # bump everything
 ```
 
-Then, from the NixOS live environment, download it, edit the variables, and run it as root:
+In **this repo**: edit modules, commit, push. Machines pick the change up on
+their next `nix flake update core`.
 
-```bash
-curl -O https://raw.githubusercontent.com/nullcopy/nixos-config/main/scripts/nixos-install.sh
-vim nixos-install.sh   # set DISK, HOSTNAME, ADMINUSER
-bash nixos-install.sh
-```
+## Formatting
 
-The script will:
-1. Partition and format the disk (GPT, EFI + LUKS2-encrypted btrfs root with subvolumes).
-2. Clone this flake to `/mnt/etc/nixos` and generate `hardware-configuration.nix`.
-3. Drop you into an interactive shell so you can make any necessary edits — at minimum:
-   - Create `hosts/<name>/configuration.nix` (see [hosts/wisp/configuration.nix](hosts/wisp/configuration.nix) as a template) and make sure it imports `./hardware-configuration.nix`.
-   - Add an entry for `<name>` under `nixosConfigurations` in `flake.nix` (mirroring the `wisp` block).
-4. Run `nixos-install`, prompt for `ADMINUSER`'s password, then cleanly unmount everything.
-
-If you defined additional users, `ADMINUSER` will need to log in first and assign their passwords with `passwd <username>`.
-
-For FIDO2 LUKS unlock, enroll a token after the first boot with the `systemd-cryptenroll` command shown in the comment at the top of `hosts/wisp/luks.nix`.
-
-### Enable the pre-commit hook
-
-The repo ships a pre-commit hook that auto-formats `.nix` files with `nixfmt`. After cloning, point git at it:
+The repo ships a pre-commit hook that auto-formats `.nix` files with
+`nixfmt` (the file lives in `templates/machine/.githooks/`; the root
+`.githooks/pre-commit` is a symlink to it, so machine repos and this repo
+share one copy). After cloning, point git at it:
 
 ```
 git config core.hooksPath .githooks
 ```
 
-You can also format the entire repo manually:
-
-```
-nix fmt
-```
-
-## Day to day
-
-From anywhere inside the flake checkout:
-
-```
-sudo nixos-rebuild switch --flake
-nix flake update            # bump all inputs
-nix flake lock --update-input nixpkgs   # bump one input
-```
-
-## Adding a new user
-
-1. `mkdir users/<name>` and create `configuration.nix` — this is a home-manager module. Start small:
-   ```nix
-   { config, lib, pkgs, inputs, ... }:
-   {
-     home.packages = with pkgs; [ ];
-     home.stateVersion = "25.11";
-   }
-   ```
-2. In the host module, declare the system user under `users.users.<name>`.
-3. In `flake.nix`, add the home-manager wiring for the host:
-   ```nix
-   home-manager.users.<name> = import ./users/<name>/configuration.nix;
-   ```
-
-## devShells
-
-One shell per language, covering the tooling used by the nixvim LSP config — a fallback for ad-hoc work in projects that don't ship their own flake. Real projects should still define their own `devShells.default` and load it via direnv (`echo 'use flake' > .envrc && direnv allow`).
-
-There is no `default` shell; always pick one explicitly:
-
-```
-nix develop /path/to/flake#rust
-nix develop /path/to/flake#python
-nix develop /path/to/flake#go
-nix develop /path/to/flake#c
-nix develop /path/to/flake#lua
-nix develop /path/to/flake#nix
-nix develop /path/to/flake#bash
-```
-
-`#rust` includes `rustPlatform.bindgenHook`, which sets `LIBCLANG_PATH` and `BINDGEN_EXTRA_CLANG_ARGS` so bindgen-based crates (`librocksdb-sys`, `zcash_script`, `ring`, …) build without the user setting anything by hand.
-
-To add another shell, drop a file like `./devShells/embedded-arm.nix` (a function taking `{ pkgs, system, fenix }` and returning a `pkgs.mkShell { … }`) and list it in `flake.nix`. Enter it with `nix develop /path/to/flake#embedded-arm`. The zsh re-exec is applied centrally by `mkDevShell` in `flake.nix`, so per-language files don't repeat it.
-
-## Noctalia config
-
-This config tracks **Noctalia v5** (a compiled Wayland shell; v4 was a QML/quickshell wrapper). `users/nullcopy/configuration.nix` enables it with `programs.noctalia` and `niri.nix` drives every panel/OSD through the v5 `noctalia msg <command>` IPC (run `noctalia msg --help` for the full list).
-
-v5 splits its writable files across two XDG dirs, and the settings UI writes to the **state** dir, not the config dir:
-
-- `~/.config/noctalia/config.toml` — the base config layer. The settings UI never writes it; it's left at noctalia's built-in defaults. Pin a base value declaratively with `programs.noctalia.settings.<…>` in `configuration.nix` and the module renders a read-only `config.toml`. (Custom palettes saved in the UI also land in `~/.config/noctalia/palettes/`, writeable but untracked.)
-- `~/.local/state/noctalia/settings.toml` — **everything you change in the settings UI**, layered on top of `config.toml`. This is the only writeable file we track: `users/nullcopy/noctalia-settings.toml` is mirrored to it via a single-file `mkOutOfStoreSymlink`, so in-UI changes write straight back into the flake repo as unstaged edits — commit them to persist. The rest of the state dir (`state.toml`, caches, the `.setup-complete` marker) is runtime noise and stays untracked.
-
-Noctalia's atomic writer is symlink-aware (it canonicalises the link and renames onto the real target), so the single-file `settings.toml` symlink survives every save.
-
-## Notes
-
-- `system.stateVersion` and `home.stateVersion` track the initial install — do not bump them on existing machines.
+Or format manually with `nix fmt`.
