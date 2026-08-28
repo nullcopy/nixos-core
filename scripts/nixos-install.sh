@@ -3,9 +3,9 @@ set -euo pipefail
 
 ### CONFIG ###
 DISK=/dev/nvme0n1
-FLAKE_REPO="https://github.com/nullcopy/nixos-config"
-HOSTNAME="myNewNixosComputer" # must match nixosConfigurations.<name> in your flake
-ADMINUSER="myAdminUser"       # wheel-group user to administer the system
+MACHINE_REPO="https://github.com/nullcopy/nixos-myhostname" # this machine's flake repo (from the nixos-core template)
+HOSTNAME="myhostname" # must match nixosConfigurations.<name> in the machine flake
+ADMINUSER="myAdminUser"       # wheel-group user declared in the machine's configuration.nix
 ##############
 
 [[ $EUID -eq 0 ]] || {
@@ -17,12 +17,18 @@ ADMINUSER="myAdminUser"       # wheel-group user to administer the system
   exit 1
 }
 
-echo "!!! This will completely erase $DISK. Type 'yes' to continue:"
+echo "!!! This will completely erase $DISK. Type YES (all capitals) to continue:"
 read -r confirm
-[[ "$confirm" == "yes" ]] || {
+[[ "$confirm" == "YES" ]] || {
   echo "Aborted."
   exit 1
 }
+
+# Clean up a previous attempt so re-running from the top is always safe:
+# a failed run leaves /mnt mounted and the LUKS mapping open, which would
+# make wipefs fail with "device busy".
+umount -R /mnt 2>/dev/null || true
+cryptsetup close cryptroot 2>/dev/null || true
 
 # Derive partition suffix: NVMe/eMMC use 'p' separator, SATA/USB do not
 if [[ "$DISK" =~ nvme|mmcblk ]]; then
@@ -67,29 +73,73 @@ mount -o subvol=@log,$OPTS /dev/mapper/cryptroot /mnt/var/log
 mount -o subvol=@snapshots,$OPTS /dev/mapper/cryptroot /mnt/.snapshots
 mount "$BOOT" /mnt/boot
 
-# Clone flake and inject hardware config
-nix-shell -p git --run "git clone '$FLAKE_REPO' /mnt/etc/nixos"
-mkdir -p "/mnt/etc/nixos/hosts/$HOSTNAME"
+# Clone the machine flake into the admin's future home and inject the
+# hardware config. Living in $HOME (not /etc/nixos) keeps the repo owned by
+# the admin user, so day-to-day git work needs no sudo.
+# The home is created 0700 here because a plain `git clone` would leave it
+# 0755 and the chown at the end fixes ownership, not mode.
+TARGET="/mnt/home/$ADMINUSER/.nixos"
+install -d -m 700 "$(dirname "$TARGET")"
+nix-shell -p git --run "git clone '$MACHINE_REPO' '$TARGET'"
 nixos-generate-config --root /mnt --show-hardware-config \
-  >"/mnt/etc/nixos/hosts/$HOSTNAME/hardware-configuration.nix"
+  >"$TARGET/hardware-configuration.nix"
+
+# Commit the generated hardware config right away, with an explicit
+# identity: root in the live ISO has none, so a bare `git commit` here
+# would fail with "unable to auto-detect email address". Also activate
+# the repo's nixfmt pre-commit hook so it's in place at first boot.
+nix-shell -p git --run "
+  git -C '$TARGET' config core.hooksPath .githooks &&
+  git -C '$TARGET' add hardware-configuration.nix &&
+  git -C '$TARGET' -c user.name='$ADMINUSER' -c user.email='$ADMINUSER@$HOSTNAME' \
+    commit -q -m 'Add hardware configuration for $HOSTNAME'"
 
 echo
-echo ">>> hardware-configuration.nix generated at /mnt/etc/nixos/hosts/$HOSTNAME/"
-echo ">>> Before continuing, make sure:"
-echo ">>>   1. hosts/$HOSTNAME/configuration.nix imports ./hardware-configuration.nix"
-echo ">>>   2. flake.nix includes a nixosConfiguration for '$HOSTNAME'"
-echo ">>> Opening a shell in /mnt/etc/nixos to make any edits. Type 'exit' when done."
-echo ">>> Press ENTER to open the shell."
-read -r
-pushd /mnt/etc/nixos >/dev/null
-${SHELL:-bash}
-popd >/dev/null
+echo ">>> hardware-configuration.nix generated and committed in $TARGET/"
+
+# Sanity checks for the mistakes that otherwise surface late, deep inside
+# nixos-install. Advisory only (the greps are deliberately loose).
+check() { # FILE REGEX DESCRIPTION
+  if grep -qE "$2" "$1"; then
+    echo ">>> ok:      $3"
+  else
+    echo ">>> WARNING: $3 -- not found in $(basename "$1")"
+  fi
+}
+check "$TARGET/configuration.nix" "hostName *= *\"$HOSTNAME\"" \
+  "configuration.nix sets networking.hostName = \"$HOSTNAME\""
+check "$TARGET/flake.nix" "nixosConfigurations\.$HOSTNAME([^A-Za-z0-9_-]|$)" \
+  "flake.nix defines nixosConfigurations.$HOSTNAME"
+check "$TARGET/configuration.nix" "users\.users\.$ADMINUSER([^A-Za-z0-9_-]|$)" \
+  "users.users.$ADMINUSER is declared in configuration.nix"
+
+# Optional review shell. Deliberately NOT $SHELL, explicitly attached to the
+# terminal, and its exit status ignored: under set -e, any of those failing
+# used to kill the whole install silently right here.
+echo
+echo ">>> Open a shell in $TARGET to review or edit before installing? [y/N]"
+read -r reply
+if [[ "$reply" =~ ^[Yy] ]]; then
+  echo ">>> Type 'exit' to continue the install."
+  (cd "$TARGET" && bash -i </dev/tty >/dev/tty 2>&1) || true
+fi
+
+echo ">>> Proceed with nixos-install? Type YES (all capitals) to continue:"
+read -r confirm
+[[ "$confirm" == "YES" ]] || {
+  echo "Aborted. Everything is still mounted under /mnt; re-run this script to start over."
+  exit 1
+}
 
 # Install from local flake (path: URI bypasses the git-clean check)
-nixos-install --flake "path:/mnt/etc/nixos#$HOSTNAME" --no-root-password
+nixos-install --flake "path:$TARGET#$HOSTNAME" --no-root-password
 
 echo ">>> Setting password for '$ADMINUSER':"
 nixos-enter --root /mnt -- passwd "$ADMINUSER"
+
+# The clone above ran as root before the admin user existed; hand the home
+# (0700 from the install -d above) over now that the account exists.
+nixos-enter --root /mnt -- chown -R "$ADMINUSER:users" "/home/$ADMINUSER"
 
 umount -R /mnt
 cryptsetup close cryptroot
