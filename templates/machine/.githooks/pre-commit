@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Format staged .nix files with nixfmt before each commit.
+# Note: the hook stages full files. A partially staged .nix file becomes
+# fully staged.
+set -euo pipefail
+
+# Test with --version. This finds a missing binary and a defective one
+# (for example, a nixfmt with broken shared-library dependencies).
+if ! nixfmt --version >/dev/null 2>&1; then
+  echo "pre-commit: nixfmt not found or not working; committing unformatted" >&2
+  exit 0
+fi
+
+git diff --cached --name-only --diff-filter=ACM -z -- '*.nix' | xargs -0 -r nixfmt
+git diff --cached --name-only --diff-filter=ACM -z -- '*.nix' | xargs -0 -r git add

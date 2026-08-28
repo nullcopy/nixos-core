@@ -1,97 +1,43 @@
 {
-  description = "My NixOS Configuration Flake";
+  description = "nixos-core: shared NixOS modules and a machine template";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
 
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
+    # Noctalia v5 is the desktop shell. nixpkgs has only v4, so this
+    # input builds v5 from its flake. The tag pin makes updates manual.
     noctalia = {
-      url = "github:noctalia-dev/noctalia-shell";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    nixvim = {
-      url = "github:nix-community/nixvim";
-    };
-
-    fenix = {
-      url = "github:nix-community/fenix";
+      url = "github:noctalia-dev/noctalia-shell?ref=v5.0.0-beta.10";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
   outputs =
-    inputs@{
+    {
       self,
       nixpkgs,
-      home-manager,
       noctalia,
-      fenix,
       ...
     }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
-
-      # Each shell lives in its own file under ./devShells; add a new one by
-      # dropping a file there and listing it below. There is no `default` —
-      # always pick a language with `nix develop /path/to/this/flake#<lang>`.
-      #
-      # mkDevShell appends a shellHook that re-execs into zsh. `nix develop`
-      # always spawns bashInteractive, dropping starship, aliases, completions,
-      # etc; and it points $SHELL at that bash so child processes (e.g. nvim's
-      # toggleterm via vim.o.shell) inherit a config-less shell. Overriding
-      # $SHELL and exec'ing zsh fixes both. Centralizing the hook here keeps
-      # per-language files focused on language tooling.
-      mkDevShell =
-        file:
-        (import file { inherit pkgs system fenix; }).overrideAttrs (old: {
-          shellHook = (old.shellHook or "") + ''
-            export SHELL=${pkgs.zsh}/bin/zsh
-            exec ${pkgs.zsh}/bin/zsh
-          '';
-        });
     in
     {
+      # The library (see ./modules). The overlay makes pkgs.noctalia
+      # available to the modules (see modules/desktop.nix).
+      nixosModules.default = {
+        imports = [ ./modules ];
+        nixpkgs.overlays = [ noctalia.overlays.default ];
+      };
+
+      # Scaffold for a new machine repo:
+      #   nix flake init -t github:nullcopy/nixos-core#machine
+      templates.machine = {
+        path = ./templates/machine;
+        description = "Per-machine NixOS flake consuming nixos-core";
+      };
+
       formatter.${system} = pkgs.nixfmt;
-
-      # devShells: one per language. To add another, drop e.g.
-      # `./devShells/embedded-arm.nix` (a function taking { pkgs, system, fenix }
-      # returning a `pkgs.mkShell { ... }`) and list it here. Enter with
-      # `nix develop /path/to/flake#<name>`.
-      devShells.${system} = {
-        rust = mkDevShell ./devShells/rust.nix;
-        python = mkDevShell ./devShells/python.nix;
-        go = mkDevShell ./devShells/go.nix;
-        forgebox = mkDevShell ./devShells/forgebox.nix;
-        c = mkDevShell ./devShells/c.nix;
-        lua = mkDevShell ./devShells/lua.nix;
-        nix = mkDevShell ./devShells/nix.nix;
-        bash = mkDevShell ./devShells/bash.nix;
-      };
-
-      nixosConfigurations = {
-
-        ## ----- wisp laptop config ----------------------------------------------
-        wisp = nixpkgs.lib.nixosSystem {
-          inherit system;
-          specialArgs = { inherit inputs; };
-          modules = [
-            ./common/configuration.nix
-            ./hosts/wisp/configuration.nix
-            home-manager.nixosModules.home-manager
-            {
-              home-manager.useGlobalPkgs = true;
-              home-manager.useUserPackages = true;
-              home-manager.extraSpecialArgs = { inherit inputs; };
-              home-manager.users.nullcopy = import ./users/nullcopy/configuration.nix;
-            }
-          ];
-        };
-      };
     };
 }

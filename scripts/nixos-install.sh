@@ -3,9 +3,9 @@ set -euo pipefail
 
 ### CONFIG ###
 DISK=/dev/nvme0n1
-FLAKE_REPO="https://github.com/nullcopy/nixos-config"
-HOSTNAME="myNewNixosComputer" # must match nixosConfigurations.<name> in your flake
-ADMINUSER="myAdminUser"       # wheel-group user to administer the system
+MACHINE_REPO="https://github.com/nullcopy/nixos-myhostname" # this machine's flake repo (from the nixos-core template)
+HOSTNAME="myhostname" # must match nixosConfigurations.<name> in the machine flake
+ADMINUSER="myAdminUser"       # wheel-group user declared in the machine's configuration.nix
 ##############
 
 [[ $EUID -eq 0 ]] || {
@@ -17,14 +17,19 @@ ADMINUSER="myAdminUser"       # wheel-group user to administer the system
   exit 1
 }
 
-echo "!!! This will completely erase $DISK. Type 'yes' to continue:"
+echo "!!! This will completely erase $DISK. Type YES (all capitals) to continue:"
 read -r confirm
-[[ "$confirm" == "yes" ]] || {
+[[ "$confirm" == "YES" ]] || {
   echo "Aborted."
   exit 1
 }
 
-# Derive partition suffix: NVMe/eMMC use 'p' separator, SATA/USB do not
+# Clean up a previous attempt: /mnt may be mounted and the LUKS mapping
+# open, which makes wipefs fail with "device busy".
+umount -R /mnt 2>/dev/null || true
+cryptsetup close cryptroot 2>/dev/null || true
+
+# Partition suffix: NVMe/eMMC devices use a 'p' separator. SATA/USB do not.
 if [[ "$DISK" =~ nvme|mmcblk ]]; then
   PART="${DISK}p"
 else
@@ -65,38 +70,83 @@ mount -o subvol=@home,$OPTS /dev/mapper/cryptroot /mnt/home
 mount -o subvol=@nix,$OPTS /dev/mapper/cryptroot /mnt/nix
 mount -o subvol=@log,$OPTS /dev/mapper/cryptroot /mnt/var/log
 mount -o subvol=@snapshots,$OPTS /dev/mapper/cryptroot /mnt/.snapshots
-mount "$BOOT" /mnt/boot
+# umask keeps the ESP private (bootctl warns about a world-readable
+# random seed). nixos-generate-config copies the masks into
+# hardware-configuration.nix.
+mount -o umask=0077 "$BOOT" /mnt/boot
 
-# Clone flake and inject hardware config
-nix-shell -p git --run "git clone '$FLAKE_REPO' /mnt/etc/nixos"
-mkdir -p "/mnt/etc/nixos/hosts/$HOSTNAME"
+# Clone the machine flake into the admin's home ($HOME keeps daily git
+# work sudo-free) and write the hardware configuration into it.
+# install -d 0700: git clone alone creates the home 0755.
+TARGET="/mnt/home/$ADMINUSER/.nixos"
+install -d -m 700 "$(dirname "$TARGET")"
+nix-shell -p git --run "git clone '$MACHINE_REPO' '$TARGET'"
 nixos-generate-config --root /mnt --show-hardware-config \
-  >"/mnt/etc/nixos/hosts/$HOSTNAME/hardware-configuration.nix"
+  >"$TARGET/hardware-configuration.nix"
+
+# Lock the flake first: nixos-install hashes the repo directory, and a
+# lock file created mid-install changes the hash ("NAR hash mismatch").
+nix --extra-experimental-features 'nix-command flakes' flake lock "path:$TARGET"
+
+# Commit both with an explicit identity (the live ISO has none) and
+# activate the nixfmt pre-commit hook.
+nix-shell -p git --run "
+  git -C '$TARGET' config core.hooksPath .githooks &&
+  git -C '$TARGET' add hardware-configuration.nix flake.lock &&
+  git -C '$TARGET' -c user.name='$ADMINUSER' -c user.email='$ADMINUSER@$HOSTNAME' \
+    commit -q -m 'Add hardware configuration and lock for $HOSTNAME'"
 
 echo
-echo ">>> hardware-configuration.nix generated at /mnt/etc/nixos/hosts/$HOSTNAME/"
-echo ">>> Before continuing, make sure:"
-echo ">>>   1. hosts/$HOSTNAME/configuration.nix imports ./hardware-configuration.nix"
-echo ">>>   2. flake.nix includes a nixosConfiguration for '$HOSTNAME'"
-echo ">>> Opening a shell in /mnt/etc/nixos to make any edits. Type 'exit' when done."
-echo ">>> Press ENTER to open the shell."
-read -r
-pushd /mnt/etc/nixos >/dev/null
-${SHELL:-bash}
-popd >/dev/null
+echo ">>> hardware-configuration.nix generated, flake.lock created, both committed in $TARGET/"
 
-# Install from local flake (path: URI bypasses the git-clean check)
-nixos-install --flake "path:/mnt/etc/nixos#$HOSTNAME" --no-root-password
+# Advisory checks for the errors that otherwise appear late, inside
+# nixos-install.
+check() { # FILE REGEX DESCRIPTION
+  if grep -qE "$2" "$1"; then
+    echo ">>> ok:      $3"
+  else
+    echo ">>> WARNING: $3 -- not found in $(basename "$1")"
+  fi
+}
+check "$TARGET/configuration.nix" "hostName *= *\"$HOSTNAME\"" \
+  "configuration.nix sets networking.hostName = \"$HOSTNAME\""
+check "$TARGET/flake.nix" "nixosConfigurations\.$HOSTNAME([^A-Za-z0-9_-]|$)" \
+  "flake.nix defines nixosConfigurations.$HOSTNAME"
+check "$TARGET/configuration.nix" "users\.users\.$ADMINUSER([^A-Za-z0-9_-]|$)" \
+  "users.users.$ADMINUSER is declared in configuration.nix"
+
+# Optional review shell: bash on /dev/tty, exit status ignored so a
+# failure here survives set -e.
+echo
+echo ">>> Open a shell in $TARGET to review or edit before installing? [y/N]"
+read -r reply
+if [[ "$reply" =~ ^[Yy] ]]; then
+  echo ">>> Type 'exit' to continue the install."
+  (cd "$TARGET" && bash -i </dev/tty >/dev/tty 2>&1) || true
+fi
+
+echo ">>> Proceed with nixos-install? Type YES (all capitals) to continue:"
+read -r confirm
+[[ "$confirm" == "YES" ]] || {
+  echo "Aborted. Everything is still mounted under /mnt; re-run this script to start over."
+  exit 1
+}
+
+# Install from the local flake. The path: URI avoids the git-clean check.
+nixos-install --flake "path:$TARGET#$HOSTNAME" --no-root-password
 
 echo ">>> Setting password for '$ADMINUSER':"
 nixos-enter --root /mnt -- passwd "$ADMINUSER"
+
+# The clone ran as root; hand the home to the now-existing admin.
+nixos-enter --root /mnt -- chown -R "$ADMINUSER:users" "/home/$ADMINUSER"
 
 umount -R /mnt
 cryptsetup close cryptroot
 
 echo
 echo ">>> NOTE:"
-echo ">>> If you defined multiple users, $ADMINUSER will need to login first and"
-echo ">>> assign their passwords with 'passwd <user>', before they can login."
+echo ">>> If you declared more than one user, log in as $ADMINUSER first"
+echo ">>> and set the other passwords with 'passwd <user>'."
 echo ">>>"
 echo ">>> Install complete. Remove the installation media and reboot."

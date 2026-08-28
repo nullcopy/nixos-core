@@ -1,0 +1,113 @@
+// System-wide default niri configuration, installed as
+// /etc/niri/config.kdl. A user's own ~/.config/niri/config.kdl replaces
+// it completely. Noctalia supplies bar, launcher, lock, and OSD;
+// `noctalia msg --help` lists the IPC commands.
+
+input {
+    keyboard {
+        xkb {
+            layout "us"
+        }
+    }
+    touchpad {
+        tap
+        natural-scroll
+    }
+    focus-follows-mouse
+}
+
+// Start the Noctalia shell with the session.
+spawn-at-startup "noctalia"
+
+binds {
+    // ----- Niri ----------------------------------------------------------
+    Mod+Shift+Slash hotkey-overlay-title="Show this help"     { show-hotkey-overlay; }
+    Mod+Shift+E     hotkey-overlay-title="Quit niri"          { quit; }
+
+    // ----- Apps ----------------------------------------------------------
+    Mod+T           hotkey-overlay-title="Terminal (alacritty)" { spawn "alacritty"; }
+    Mod+B           hotkey-overlay-title="Browser (brave)"      { spawn "brave"; }
+
+    // ----- Noctalia panels ----------------------------------------------
+    Mod+Space   hotkey-overlay-title="Launcher"             { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
+    Mod+Shift+V hotkey-overlay-title="Clipboard history"    { spawn "noctalia" "msg" "panel-toggle" "clipboard"; }
+    Mod+Period  hotkey-overlay-title="Emoji picker"         { spawn "noctalia" "msg" "panel-toggle" "launcher" "/emo"; }
+    Mod+Tab     hotkey-overlay-title="Window switcher"      { spawn "noctalia" "msg" "window-switcher"; }
+    Mod+Alt+L   hotkey-overlay-title="Lock screen"          { spawn "noctalia" "msg" "session" "lock"; }
+    Mod+Escape  hotkey-overlay-title="Session menu"         { spawn "noctalia" "msg" "panel-toggle" "session"; }
+    Mod+N       hotkey-overlay-title="Notification history" { spawn "noctalia" "msg" "panel-toggle" "control-center" "notifications"; }
+    Mod+Shift+N hotkey-overlay-title="Toggle DND"           { spawn "noctalia" "msg" "notification-dnd-toggle"; }
+    Mod+Comma   hotkey-overlay-title="Settings"             { spawn "noctalia" "msg" "settings-toggle"; }
+    Mod+Shift+C hotkey-overlay-title="Control center"       { spawn "noctalia" "msg" "panel-toggle" "control-center"; }
+    Mod+Shift+W hotkey-overlay-title="Wallpaper picker"     { spawn "noctalia" "msg" "panel-toggle" "wallpaper"; }
+    Mod+Shift+B hotkey-overlay-title="Toggle bar"           { spawn "noctalia" "msg" "bar-toggle"; }
+    Mod+Shift+D hotkey-overlay-title="Toggle dark mode"     { spawn "noctalia" "msg" "theme-mode-toggle"; }
+
+    // ----- Media / volume / brightness (through the Noctalia OSD) -------
+    XF86AudioRaiseVolume  allow-when-locked=true hotkey-overlay-title=null { spawn "noctalia" "msg" "volume-up"; }
+    XF86AudioLowerVolume  allow-when-locked=true hotkey-overlay-title=null { spawn "noctalia" "msg" "volume-down"; }
+    XF86AudioMute         allow-when-locked=true hotkey-overlay-title=null { spawn "noctalia" "msg" "volume-mute"; }
+    XF86AudioMicMute      allow-when-locked=true hotkey-overlay-title=null { spawn "noctalia" "msg" "mic-mute"; }
+    XF86MonBrightnessUp   allow-when-locked=true hotkey-overlay-title=null { spawn "noctalia" "msg" "brightness-up"; }
+    XF86MonBrightnessDown allow-when-locked=true hotkey-overlay-title=null { spawn "noctalia" "msg" "brightness-down"; }
+    XF86AudioPlay         allow-when-locked=true hotkey-overlay-title=null { spawn "noctalia" "msg" "media" "toggle"; }
+    XF86AudioNext         allow-when-locked=true hotkey-overlay-title=null { spawn "noctalia" "msg" "media" "next"; }
+    XF86AudioPrev         allow-when-locked=true hotkey-overlay-title=null { spawn "noctalia" "msg" "media" "previous"; }
+
+    // ----- Screenshots (grim/slurp/satty come with core.desktop) --------
+    Print           hotkey-overlay-title="Screenshot region"  { spawn "sh" "-c" "grim -g \"$(slurp)\" - | satty --filename -"; }
+    Mod+Print       hotkey-overlay-title="Screenshot window"  { screenshot-window; }
+    Ctrl+Print      hotkey-overlay-title="Screenshot screen"  { screenshot-screen; }
+
+    // ----- Window management --------------------------------------------
+    Mod+Q                  hotkey-overlay-title="Close window"        { close-window; }
+    Mod+O                  hotkey-overlay-title="Toggle overview"     { toggle-overview; }
+    Mod+F                  hotkey-overlay-title="Maximize column"     { maximize-column; }
+    Mod+Shift+F            hotkey-overlay-title="Fullscreen window"   { fullscreen-window; }
+    Mod+V                  hotkey-overlay-title="Toggle floating"     { toggle-window-floating; }
+    Mod+R                  hotkey-overlay-title="Cycle column width"  { switch-preset-column-width; }
+    Mod+C                  hotkey-overlay-title="Center column"       { center-column; }
+    Mod+Shift+BracketLeft  hotkey-overlay-title="Consume/expel left"  { consume-or-expel-window-left; }
+    Mod+Shift+BracketRight hotkey-overlay-title="Consume/expel right" { consume-or-expel-window-right; }
+
+    // ----- Focus (arrows + vim) -----------------------------------------
+    Mod+Left        hotkey-overlay-title=null { focus-column-left; }
+    Mod+Right       hotkey-overlay-title=null { focus-column-right; }
+    Mod+Up          hotkey-overlay-title=null { focus-window-up; }
+    Mod+Down        hotkey-overlay-title=null { focus-window-down; }
+    Mod+H           hotkey-overlay-title="Focus column left"  { focus-column-left; }
+    Mod+J           hotkey-overlay-title="Focus window down"  { focus-window-down; }
+    Mod+K           hotkey-overlay-title="Focus window up"    { focus-window-up; }
+    Mod+L           hotkey-overlay-title="Focus column right" { focus-column-right; }
+
+    // ----- Move windows -------------------------------------------------
+    Mod+Shift+Left  hotkey-overlay-title=null { move-column-left; }
+    Mod+Shift+Right hotkey-overlay-title=null { move-column-right; }
+    Mod+Shift+Up    hotkey-overlay-title=null { move-window-up; }
+    Mod+Shift+Down  hotkey-overlay-title=null { move-window-down; }
+    Mod+Shift+H     hotkey-overlay-title="Move column left"  { move-column-left; }
+    Mod+Shift+J     hotkey-overlay-title="Move window down"  { move-window-down; }
+    Mod+Shift+K     hotkey-overlay-title="Move window up"    { move-window-up; }
+    Mod+Shift+L     hotkey-overlay-title="Move column right" { move-column-right; }
+
+    // ----- Workspaces ---------------------------------------------------
+    Mod+Page_Up           hotkey-overlay-title="Workspace up"               { focus-workspace-up; }
+    Mod+Page_Down         hotkey-overlay-title="Workspace down"             { focus-workspace-down; }
+    Mod+Shift+Page_Up     hotkey-overlay-title="Move column workspace up"   { move-column-to-workspace-up; }
+    Mod+Shift+Page_Down   hotkey-overlay-title="Move column workspace down" { move-column-to-workspace-down; }
+    Mod+1 hotkey-overlay-title="Workspace 1" { focus-workspace 1; }
+    Mod+2 hotkey-overlay-title=null { focus-workspace 2; }
+    Mod+3 hotkey-overlay-title=null { focus-workspace 3; }
+    Mod+4 hotkey-overlay-title=null { focus-workspace 4; }
+    Mod+5 hotkey-overlay-title=null { focus-workspace 5; }
+    Mod+Shift+1 hotkey-overlay-title="Move column to workspace N" { move-column-to-workspace 1; }
+    Mod+Shift+2 hotkey-overlay-title=null { move-column-to-workspace 2; }
+    Mod+Shift+3 hotkey-overlay-title=null { move-column-to-workspace 3; }
+    Mod+Shift+4 hotkey-overlay-title=null { move-column-to-workspace 4; }
+    Mod+Shift+5 hotkey-overlay-title=null { move-column-to-workspace 5; }
+}
+
+switch-events {
+    // Lock the screen when the laptop lid closes
+    lid-close { spawn "noctalia" "msg" "session" "lock"; }
+}

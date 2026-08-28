@@ -1,11 +1,1 @@
-#!/usr/bin/env bash
-# Format staged .nix files with nixfmt before committing.
-
-staged=$(git diff --cached --name-only --diff-filter=ACM -- '*.nix')
-[ -z "$staged" ] && exit 0
-
-# Format and re-stage
-echo "$staged" | xargs nixfmt
-echo "$staged" | xargs git add
-
-exit 0
+../templates/machine/.githooks/pre-commit
