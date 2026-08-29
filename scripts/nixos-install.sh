@@ -84,18 +84,23 @@ nix-shell -p git --run "git clone '$MACHINE_REPO' '$TARGET'"
 nixos-generate-config --root /mnt --show-hardware-config \
   >"$TARGET/hardware-configuration.nix"
 
-# Commit the generated hardware config right away, with an explicit
-# identity: root in the live ISO has none, so a bare `git commit` here
-# would fail with "unable to auto-detect email address". Also activate
-# the repo's nixfmt pre-commit hook so it's in place at first boot.
+# Lock the flake BEFORE nixos-install sees it. nixos-install hashes the
+# repo directory up front; if it then has to create flake.lock inside it,
+# the directory no longer matches and it aborts with "NAR hash mismatch".
+nix --extra-experimental-features 'nix-command flakes' flake lock "path:$TARGET"
+
+# Commit the generated hardware config and lock right away, with an
+# explicit identity: root in the live ISO has none, so a bare `git commit`
+# here would fail with "unable to auto-detect email address". Also
+# activate the repo's nixfmt pre-commit hook so it's in place at first boot.
 nix-shell -p git --run "
   git -C '$TARGET' config core.hooksPath .githooks &&
-  git -C '$TARGET' add hardware-configuration.nix &&
+  git -C '$TARGET' add hardware-configuration.nix flake.lock &&
   git -C '$TARGET' -c user.name='$ADMINUSER' -c user.email='$ADMINUSER@$HOSTNAME' \
-    commit -q -m 'Add hardware configuration for $HOSTNAME'"
+    commit -q -m 'Add hardware configuration and lock for $HOSTNAME'"
 
 echo
-echo ">>> hardware-configuration.nix generated and committed in $TARGET/"
+echo ">>> hardware-configuration.nix generated, flake.lock created, both committed in $TARGET/"
 
 # Sanity checks for the mistakes that otherwise surface late, deep inside
 # nixos-install. Advisory only (the greps are deliberately loose).
