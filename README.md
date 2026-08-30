@@ -48,7 +48,8 @@ off until the machine enables it:
 
 - `core.desktop.enable` — full graphical stack: niri, greetd/tuigreet, XDG
   portals, pipewire audio, bluetooth, power management, noctalia companion
-  tools. Leave off for servers.
+  tools. The greeter offers a session menu (niri or a plain shell), so
+  niri is available, not mandatory. Leave off for servers.
 - `core.fde.*` — full-disk encryption is **mandatory**: the build fails if
   the initrd unlocks no LUKS volume (`core.fde.allowUnencrypted` is the
   discouraged escape hatch for throwaway VMs). Unlock methods are LUKS2

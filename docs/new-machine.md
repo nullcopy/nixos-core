@@ -152,7 +152,7 @@ Available `core.*` options (see [modules/](../modules) for the source):
 
 | Option | What it enables |
 |---|---|
-| `core.desktop.enable` | Full graphical stack: niri, greetd/tuigreet, XDG portals, pipewire, bluetooth, power management |
+| `core.desktop.enable` | Full graphical stack: niri, greetd/tuigreet (with a session menu — niri or a plain shell, so nobody is forced into a DE), XDG portals, pipewire, bluetooth, power management |
 | `core.fde.*` | FDE is mandatory (build-time assertion); `fido2.enable` for YubiKey unlock at boot; key management via standard tools (step 5, [docs/fde.md](fde.md)) |
 | `core.tailscale.enable` | tailscale daemon only; the admin runs `sudo tailscale up` / `down` by hand, never with an exit node (step 6) |
 | `core.nymvpn.enable` | NymVPN daemon and CLI; `core.nymvpn.autoconnect` (default on) brings the machine-wide tunnel up at boot (step 6) |
@@ -235,7 +235,8 @@ The script will:
 
 Remove the install media and reboot. You'll be asked for the disk
 passphrase, then land on a login prompt (or the greeter, if the desktop is
-enabled).
+enabled — press **F2** there to pick between the niri session and a plain
+**Shell** session; the choice is remembered per user).
 
 **If the script fails or you abort partway, just run it again from the
 top.** It's a from-scratch wipe every time (nothing worth keeping exists on
