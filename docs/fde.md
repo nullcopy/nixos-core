@@ -103,34 +103,6 @@ From here, losing one of two tokens is routine (wipe its slot, enroll a
 replacement). Losing the *only* token is fatal — by design, nobody can
 open the disk.
 
-## Is a removed passphrase truly gone?
-
-For most threat models, yes:
-
-- Wiping the slot **overwrites the wrapped volume-key copy in the LUKS
-  header**. The passphrase itself was never stored; with its slot gone, it
-  derives nothing. This is the standard, intended guarantee.
-- Caveat 1 — **SSD wear-leveling**: the drive's flash translation layer
-  may keep stale physical copies of overwritten header blocks. An attacker
-  with chip-level forensics *and* knowledge of the old passphrase could in
-  principle recover the old slot and unwrap the volume key. Exotic, but
-  not impossible.
-- Caveat 2 — **backups**: any LUKS header backup (`luksHeaderBackup`) or
-  full-disk image made while the passphrase slot existed contains that
-  slot forever. The old passphrase opens those copies for eternity.
-
-If your threat model requires the old passphrase to be cryptographically
-worthless *no matter what survived where*, re-encrypt with a fresh volume
-key (rewrites the entire disk; have a backup and stable power; it can run
-online on the mounted system):
-
-```sh
-sudo cryptsetup reencrypt --active-name cryptroot
-```
-
-After that, old headers, old slots, and old passphrases are useless
-everywhere, including in stale flash cells and forgotten backups.
-
 ## Odds and ends
 
 - `systemd-cryptenroll --recovery-key` enrolls a machine-generated
