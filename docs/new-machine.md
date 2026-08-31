@@ -17,17 +17,13 @@ github:<user>/dotfiles              <- each user's home environment,
                                        applied with standalone home-manager
 ```
 
-- **This repo** provides reusable NixOS modules behind `core.*` options, the
-  machine-repo template, and the install script. It defines no machines.
-- **A machine repo** is tiny: a flake that imports `core.nixosModules.default`,
-  a ~50-line `configuration.nix`, and the generated `hardware-configuration.nix`.
-  [nixos-wisp](https://github.com/nullcopy/nixos-wisp) is a complete real
-  example (an encrypted laptop with the full desktop stack).
-- **User repos** are out of scope for the system: machines only declare that
-  accounts exist. Each user applies their own home with standalone
-  [home-manager](https://github.com/nix-community/home-manager) —
-  [nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) is the reference
-  layout, and step 7 below has a minimal starter.
+- A machine repo is ~50 lines of config plus the generated hardware config
+  — [nixos-wisp](https://github.com/nullcopy/nixos-wisp) is a complete
+  real example.
+- Users apply their homes with standalone
+  [home-manager](https://github.com/nix-community/home-manager) (step 7);
+  [nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) is the
+  reference layout.
 
 ## What you need
 
@@ -157,11 +153,8 @@ Available `core.*` options (see [modules/](../modules) for the source):
 | `core.tailscale.enable` | tailscale daemon only; the admin runs `sudo tailscale up` / `down` by hand, never with an exit node (step 6) |
 | `core.nymvpn.enable` | NymVPN daemon and CLI; `core.nymvpn.autoconnect` (default on) brings the machine-wide tunnel up at boot (step 6) |
 
-Everything in `base.nix` (NetworkManager, systemd-resolved, GC schedule,
-locked root, base packages, …) applies to every machine, but its
-opinionated values carry `lib.mkDefault`, so overriding them here just
-works. Localization (`time.timeZone`, `i18n.defaultLocale`) is deliberately
-*not* in core — every machine sets its own, as above.
+Values from `base.nix` carry `lib.mkDefault`, so overriding them here
+just works.
 
 ### Push it
 
@@ -227,8 +220,8 @@ The script will:
    Then ask **"Open a shell to review or edit? [y/N]"** — say `y` to get a
    shell inside the repo (fix any warnings; anything you edit here can be
    committed at first boot, step 4; type `exit` to return), or `N` to
-   skip. Finally it asks you to type `YES` (capitals — it's about to write
-   the disk) to proceed.
+   skip. Finally it asks for a second `YES` to proceed with
+   `nixos-install`.
 4. Run `nixos-install` (this builds/downloads the whole system — expect a
    while on first install), prompt for `ADMINUSER`'s login password, hand
    the repo's ownership to `ADMINUSER`, and unmount.
@@ -286,17 +279,12 @@ admin work, `sudo -i` when you really need a root shell.
 **About `~/.nixos` itself** — three facts worth knowing:
 
 - *The running system does not depend on it.* `nixos-rebuild` copies the
-  repo into the nix store, builds the system there, and the bootloader and
-  running system reference only store paths. The checkout matters only at
-  the moment you rebuild. Delete it and the machine keeps booting and
-  running exactly as before; you just need a fresh `git clone` before the
-  next rebuild (push first — anything uncommitted is the only thing you'd
-  lose).
-- *Other users don't need to read it.* Home directories are `0700` on
-  NixOS, and that's fine: the only reader is `nixos-rebuild` running as
-  root via `sudo`, and root bypasses permissions. Another admin who wants
-  to edit the config clones their own copy — git is the sync mechanism,
-  not the filesystem.
+  repo into the store; afterwards only store paths are referenced. Delete
+  the checkout and the machine still boots — just clone again before the
+  next rebuild (push first).
+- *Other users can't read it, and don't need to.* Homes are `0700`;
+  `nixos-rebuild` reads it as root via sudo. Another admin clones their
+  own copy.
 - *If root's git complains about "dubious ownership"* when rebuilding
   from a repo owned by you, that's git's safety check, not a real
   problem: `sudo git config --global --add safe.directory ~/.nixos` once.
@@ -305,30 +293,13 @@ admin work, `sudo -i` when you really need a root shell.
 
 **On the target machine, as the admin user.**
 
-Full-disk encryption itself is **not optional**: nixos-core refuses to
-build a system whose initrd unlocks no LUKS volume. (The escape hatch for
-throwaway VMs is `core.fde.allowUnencrypted = true` — real machines never
-set it.) The installer always creates the LUKS volume and sets an initial
-passphrase; if you partitioned manually, your layout must include one.
+FDE is mandatory: the build fails without a LUKS volume in the initrd
+(the installer always creates one; a manual layout must too). How it
+unlocks is up to you — passphrases and FIDO2 tokens in any combination,
+managed with `systemd-cryptenroll`. **All recipes, traps, and the
+token-only checklist: [docs/fde.md](fde.md).**
 
-What *is* flexible is **how the volume unlocks**. LUKS2 keyslots are
-independent — any enrolled method opens the disk — so a machine can have a
-passphrase, one or more FIDO2 tokens (YubiKey 5, SoloKey, Token2, …), or
-any combination, including token-only. Management uses the standard
-`systemd-cryptenroll`/`cryptsetup` commands — **the full guide, including
-the traps, the going-token-only checklist, and what "removed" really means
-for an old passphrase, is [docs/fde.md](fde.md)**. The two most common
-operations:
-
-```sh
-sudo systemd-cryptenroll /dev/nvme0n1p2        # inspect enrolled methods
-sudo systemd-cryptenroll --fido2-with-client-pin=yes \
-  --fido2-device=auto /dev/nvme0n1p2           # enroll a token (PIN + touch)
-```
-
-(Always the LUKS *partition*, never `/dev/mapper/...` — see the guide.)
-
-**To unlock with a token at boot**, also enable boot-side support in
+**To unlock with a token at boot**, enable boot-side support in
 `configuration.nix` and rebuild *before* relying on it:
 
 ```nix
@@ -342,34 +313,25 @@ core.fde.fido2.enable = true;
 #   boot.initrd.luks.devices.nixos-enc.device = "/dev/nvme0n1p2";
 ```
 
-Then `sudo nixos-rebuild switch --flake ~/.nixos`, enroll, and reboot to
-test: token inserted → PIN + touch; token absent → passphrase prompt (as
-long as a passphrase slot exists).
+Then `sudo nixos-rebuild switch --flake ~/.nixos`, enroll a token (see
+the guide), and reboot to test: token inserted → PIN + touch; absent →
+passphrase prompt.
 
-**Going token-only is supported** — but follow [docs/fde.md](fde.md)'s
-checklist to the letter: enroll and boot-test a second, offline backup
-token *before* wiping the passphrase slots, because
-`systemd-cryptenroll` has no last-slot seatbelt and a token-only volume
-with a lost sole token is unrecoverable by design.
+Going token-only is supported — follow the guide's checklist exactly; a
+token-only volume with a lost sole token is unrecoverable by design.
 
 ## 6. Optional: VPNs (tailscale / NymVPN)
 
 **On the target machine, as the admin user.**
 
-VPN membership is machine policy, managed here — user dotfiles contain no
-VPN config, and only the admin ever sets anything up. The division of
-labour between the two VPNs:
+VPN membership is machine policy; only the admin sets anything up, and
+neither VPN gates anyone's login:
 
 - **NymVPN** is the machine's default route. `nym-vpn-autoconnect` brings
   the tunnel up at every boot, for everyone, before anybody logs in.
 - **tailscale** carries *only* tailnet destinations (`100.64.0.0/10` and
   MagicDNS names) — never give it an exit node — and is up only when the
-  admin has run `sudo tailscale up`. Other users never see it and need
-  nothing from it.
-
-Neither one gates login: a user with no VPN credentials of any kind logs
-in normally; their traffic simply goes through NymVPN like everyone
-else's.
+  admin has run `sudo tailscale up`.
 
 **NymVPN** (`core.nymvpn.enable`): store the machine's account once, as a
 wheel user, then kick the autoconnect service (afterwards it's automatic
@@ -393,28 +355,24 @@ sudo tailscale down                                # when done
 
 The first `up` prints an auth URL (or pass `--auth-key=tskey-…` from
 `headscale preauthkeys create`); tailscaled remembers the enrollment in
-`/var/lib/tailscale`, so later `up`s connect immediately. Don't pass
-`--exit-node`: NymVPN is the default route.
+`/var/lib/tailscale`, so later `up`s connect immediately.
 
 ## 7. Each user sets up their home
 
 **On the target machine, as each user (not root).**
 
-Every user (including the admin) applies their own environment from their
-own dotfiles repo. A user without one can skip this entirely — with
-`core.desktop.enable` they still get the full niri + Noctalia desktop
-(the system-wide default at `/etc/niri/config.kdl`), and changes they
-make in Noctalia's settings UI persist in their own
-`~/.local/state/noctalia/settings.toml`.
+Every user (including the admin) applies their own environment from
+their own dotfiles repo. A user without one can skip this entirely: with
+`core.desktop.enable` they get the full niri + Noctalia desktop from the
+system default (`/etc/niri/config.kdl`), and Noctalia settings-UI
+changes persist in their own `~/.local/state/noctalia/settings.toml`.
 
-For a user with dotfiles, personalizing the desktop means shipping their
-own `~/.config/niri/config.kdl` — niri prefers it over the system file
-(no merging; the personal file replaces the baseline wholesale, so start
-from a copy of nixos-core's `modules/niri-default-config.kdl`). To
-*capture* Noctalia settings in git, symlink
-`~/.local/state/noctalia/settings.toml` into the repo working tree with
-home-manager's mkOutOfStoreSymlink — then the settings UI writes straight
-into the checkout (nullcopy/dotfiles does exactly this).
+Dotfiles personalize the desktop by shipping `~/.config/niri/config.kdl`
+(it replaces the system file wholesale — start from a copy of
+`modules/niri-default-config.kdl`), and can capture Noctalia settings by
+symlinking `~/.local/state/noctalia/settings.toml` into the repo
+checkout with mkOutOfStoreSymlink —
+[nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) does both.
 
 **If the user already has a dotfiles repo**
 ([nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) is the reference
@@ -496,6 +454,6 @@ needs root.
 - **A `core.*` change doesn't arrive on a machine**: machine repos pin core
   in `flake.lock`. Run `nix flake update core` there — updates are pulled
   deliberately, never automatic.
-- **`git` complains about dubious ownership when run with sudo**: don't run
-  git with sudo; the repo lives in your home precisely so you never have to.
-  Only `nixos-rebuild` needs sudo.
+- **`git` complains about dubious ownership**: plain git work never needs
+  sudo — drop it. For root's git during a rebuild, see the
+  `safe.directory` note in step 4.

@@ -5,19 +5,12 @@
   ...
 }:
 
-# A complete desktop environment, system-owned and available to EVERY
-# user: niri + Noctalia (bar, launcher, lock, notifications) with a
-# working default config installed as /etc/niri/config.kdl. niri falls
-# back to that file when a user has no ~/.config/niri/config.kdl, so the
-# session works with zero per-user setup; a user's dotfiles personalize
-# it by shipping their own config.kdl (theirs replaces the system file
-# wholesale — no merging). Per-user Noctalia state (settings.toml etc.)
-# lives in each user's $HOME either way; dotfiles that want to capture it
-# use the mutable-config symlink pattern in the user repo.
+# A complete desktop for every user: niri + Noctalia, with a working
+# default config at /etc/niri/config.kdl (niri falls back to it when a
+# user has no ~/.config/niri/config.kdl — see that file's header).
 #
 # niri is AVAILABLE, not REQUIRED: the greeter offers a session menu (F2)
-# with niri and a plain "Shell" session that just runs the user's login
-# shell on the console, and remembers each user's last choice.
+# with niri and a plain "Shell" session, and remembers each user's choice.
 let
   # A console session for the greeter. greetd runs Exec through the user's
   # login shell, so this lands in whatever shell the account has.

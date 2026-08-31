@@ -12,9 +12,7 @@
 # https://github.com/nymtech/nym-vpn-client/releases instead.
 #
 # The account and the tunnel are MACHINE-wide: one account per machine,
-# stored daemon-side, and the tunnel carries every user's traffic. There
-# is no per-user account or per-user config anywhere in dotfiles, and
-# users other than the admin never touch nym at all.
+# stored daemon-side, and the tunnel carries every user's traffic.
 #
 # First-time setup, once per machine, by a wheel user (needs an account
 # from https://nym.com):
@@ -130,8 +128,7 @@ in
     # Grant wheel users (and root, for the autoconnect service) daemon
     # access without an auth prompt: the upstream default of auth_self
     # needs a polkit authentication agent, which this niri setup doesn't
-    # run. Non-wheel users are simply unable to drive the daemon — they
-    # don't need to, the tunnel is already up for them.
+    # run.
     security.polkit = {
       enable = true;
       extraConfig = ''
@@ -148,8 +145,7 @@ in
     # Mirrors the unit shipped in the official .deb, plus an explicit PATH:
     # the daemon shells out to these network tools at tunnel setup, and on
     # NixOS they aren't in a system service's default PATH (without them it
-    # fails with Error(TunDevice)). Running the daemon is harmless on its own;
-    # like tailscaled, it creates no tunnel until a client asks it to connect.
+    # fails with Error(TunDevice)).
     systemd.services.nym-vpnd = {
       description = "NymVPN daemon";
       wantedBy = [ "multi-user.target" ];

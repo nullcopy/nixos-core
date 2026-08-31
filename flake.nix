@@ -24,10 +24,8 @@
       pkgs = nixpkgs.legacyPackages.${system};
     in
     {
-      # The library. Machine flakes take nixos-core as an input and list this
-      # in their modules; everything it provides is baseline-with-mkDefault or
-      # gated behind a `core.*` option (see ./modules). The overlay rides
-      # along so modules can use pkgs.noctalia (see modules/desktop.nix).
+      # The library (see ./modules). The overlay rides along so modules can
+      # use pkgs.noctalia (see modules/desktop.nix).
       nixosModules.default = {
         imports = [ ./modules ];
         nixpkgs.overlays = [ noctalia.overlays.default ];

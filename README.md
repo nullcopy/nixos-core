@@ -13,8 +13,7 @@ it exports reusable modules and a template for per-machine repos.
 
 Machine repos consume this repo as a flake input, so improvements flow out as
 versioned updates (`nix flake update core` in the machine repo) — never as
-git merges. Users manage their own environments from their own dotfiles
-repos; the machine only declares that their accounts exist.
+git merges.
 
 ## Layout
 
@@ -36,9 +35,6 @@ scripts/
   nixos-install.sh   # disk partitioning + install for a new machine
 ```
 
-(Dev shells are a user-space concern and live in each user's dotfiles repo,
-e.g. `nix develop github:nullcopy/dotfiles#rust`.)
-
 ## Options
 
 Everything opinionated is either overridable (opinionated values in
@@ -46,30 +42,14 @@ Everything opinionated is either overridable (opinionated values in
 without `mkForce`; list options like `environment.systemPackages` merge) or
 off until the machine enables it:
 
-- `core.desktop.enable` — a complete, system-owned desktop environment
-  every user can log into with zero setup: niri + Noctalia v5 with a
-  working default config at /etc/niri/config.kdl, plus greetd/tuigreet,
-  XDG portals, pipewire audio, bluetooth, power management. A user's
-  dotfiles personalize it by shipping their own ~/.config/niri/config.kdl
-  (it replaces the system file wholesale). The greeter offers a session
-  menu (niri or a plain shell), so the DE is available, not mandatory.
-  Leave off for servers.
-- `core.fde.*` — full-disk encryption is **mandatory**: the build fails if
-  the initrd unlocks no LUKS volume (`core.fde.allowUnencrypted` is the
-  discouraged escape hatch for throwaway VMs). Unlock methods are LUKS2
-  keyslots — passphrases and FIDO2 tokens (YubiKeys) in any combination,
-  including token-only — managed with the standard tools per
-  [docs/fde.md](docs/fde.md). `core.fde.fido2.enable` turns on token
-  unlock at boot; `core.fde.name` covers a non-default mapper name.
-- `core.nymvpn.enable` — NymVPN daemon and CLI, machine-wide: one account
-  per machine, stored daemon-side once by the admin; `nym-vpn-autoconnect`
-  then brings the tunnel up at every boot as the default route for every
-  user's traffic.
-- `core.tailscale.enable` — tailscale daemon only. The admin connects by
-  hand with `sudo tailscale up` and never with an exit node: only tailnet
-  destinations use it, everything else goes via NymVPN.
-- Localization (`time.timeZone`, `i18n.defaultLocale`) is per machine, set
-  in each machine's `configuration.nix`, not here.
+- `core.desktop.enable` — full DE for every user (niri + Noctalia,
+  greetd session menu, pipewire, bluetooth). Off for servers.
+- `core.fde.*` — FDE is mandatory (build assertion); `fido2.enable` adds
+  YubiKey unlock at boot. See [docs/fde.md](docs/fde.md).
+- `core.nymvpn.enable` — machine-wide NymVPN; autoconnects at boot as the
+  default route.
+- `core.tailscale.enable` — tailscale daemon only; the admin runs
+  `sudo tailscale up` by hand, never with an exit node.
 
 ## Setting up a new machine
 
@@ -86,9 +66,8 @@ reference. The short version:
    Replace the `MYHOSTNAME`/`MYADMIN` placeholders, set the toggles, push it.
 2. From the NixOS live ISO, download `scripts/nixos-install.sh`, edit the
    variables at the top (`DISK`, `MACHINE_REPO`, `HOSTNAME`, `ADMINUSER`),
-   and run it as root. It partitions (GPT, EFI + LUKS2 btrfs), clones the
-   machine repo to `/home/<admin>/.nixos`, generates
-   `hardware-configuration.nix`, and runs `nixos-install`.
+   and run it as root. It partitions the disk, clones your repo, and
+   installs.
 3. After first boot, each user clones their own dotfiles repo and applies it
    with standalone home-manager.
 

@@ -15,8 +15,7 @@
 # need no login. Never pass --exit-node: only tailnet destinations
 # (100.64.0.0/10, MagicDNS names) should ride tailscale; everything else
 # follows the default route, which is NymVPN's tunnel when
-# core.nymvpn.enable is on. Other users need nothing from tailscale and
-# cannot control it (the daemon requires root or its operator).
+# core.nymvpn.enable is on.
 {
   options.core.tailscale.enable = lib.mkEnableOption "tailscale daemon (manual `sudo tailscale up`)";
 

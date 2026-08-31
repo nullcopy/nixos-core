@@ -13,17 +13,8 @@
 # the machine config. core.fde.allowUnencrypted is the escape hatch for
 # throwaway VMs and is deliberately discouraged.
 #
-# HOW the volume unlocks is flexible: LUKS2 keyslots are independent, so a
-# machine can use a passphrase, one or more FIDO2 tokens (YubiKeys etc.),
-# or any mix, including token-only. Keyslot management is done with the
-# standard tools (systemd-cryptenroll / cryptsetup) — see docs/fde.md for
-# the full guide, including the traps and the token-only checklist.
-#
-# Token unlock at BOOT needs core.fde.fido2.enable (stage-1 systemd +
-# fido2-device=auto in crypttab). With it on: token present → PIN + touch;
-# token absent → passphrase prompt (if a passphrase slot still exists).
-# The crypttab option is attached to the volume named core.fde.name, so
-# that name must match the mapper the hardware config declares.
+# Keyslot management (passphrase / FIDO2 / any mix): docs/fde.md.
+# Boot-time token unlock: core.fde.fido2.enable (options below).
 let
   cfg = config.core.fde;
 

@@ -14,7 +14,6 @@
     "flakes"
   ];
 
-  # Garbage collection for nix generations
   nix.gc = {
     automatic = lib.mkDefault true;
     dates = lib.mkDefault "daily";
@@ -42,13 +41,10 @@
   services.pcscd.enable = lib.mkDefault true;
 
   ## ----- root ----------------------------------------------------------------
-  # Direct root login is disabled: the account's password is locked ("!").
-  # Administration happens through wheel users and sudo (`sudo -i` for a
-  # root shell). The install script's --no-root-password already leaves root
-  # locked; declaring it here makes that a property of the config rather
-  # than of the install path. Note: with the default users.mutableUsers =
-  # true this is applied when the system is first created — on an existing
-  # machine, verify with `sudo passwd -S root` (expect "L").
+  # Root's password is locked ("!"); use sudo from a wheel user instead.
+  # With the default users.mutableUsers = true this only applies when the
+  # system is first created — on an existing machine verify with
+  # `sudo passwd -S root` (expect "L").
   users.users.root.hashedPassword = lib.mkDefault "!";
 
   ## ----- shells --------------------------------------------------------------

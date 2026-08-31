@@ -118,9 +118,9 @@ check "$TARGET/flake.nix" "nixosConfigurations\.$HOSTNAME([^A-Za-z0-9_-]|$)" \
 check "$TARGET/configuration.nix" "users\.users\.$ADMINUSER([^A-Za-z0-9_-]|$)" \
   "users.users.$ADMINUSER is declared in configuration.nix"
 
-# Optional review shell. Deliberately NOT $SHELL, explicitly attached to the
-# terminal, and its exit status ignored: under set -e, any of those failing
-# used to kill the whole install silently right here.
+# Optional review shell. Not $SHELL (may not exist in the ISO), attached to
+# /dev/tty, exit status ignored: under set -e, any of those failing would
+# silently abort the install right here.
 echo
 echo ">>> Open a shell in $TARGET to review or edit before installing? [y/N]"
 read -r reply

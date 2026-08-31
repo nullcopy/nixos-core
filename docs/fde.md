@@ -80,19 +80,10 @@ sudo systemd-cryptenroll --wipe-slot=3 /dev/nvme0n1p2
 `--wipe-slot=fido2` removes *all* tokens at once; `--wipe-slot=password`
 removes *all* passphrases at once.
 
-**Use the token at boot:** enable in the machine's `configuration.nix` and
-rebuild before relying on it —
-
-```nix
-core.fde.fido2.enable = true;
-# plus core.fde.name = "<mapper>" if the volume isn't the installer's
-# "cryptroot" (the build checks the name exists), and
-# boot.initrd.luks.devices.<mapper>.device if the generated hardware
-# config doesn't declare the volume at all
-```
-
-Token inserted at boot → PIN + touch; absent → passphrase prompt (if a
-passphrase slot still exists).
+**Use the token at boot:** `core.fde.fido2.enable = true` in the
+machine's `configuration.nix` (plus `core.fde.name` if the mapper isn't
+"cryptroot"), rebuild, reboot-test — the full block is in
+[new-machine.md](new-machine.md) step 5.
 
 ## Going token-only (removing the passphrase)
 
@@ -114,7 +105,7 @@ open the disk.
 
 ## Is a removed passphrase truly gone?
 
-Short answer: for most threat models, yes. Precisely:
+For most threat models, yes:
 
 - Wiping the slot **overwrites the wrapped volume-key copy in the LUKS
   header**. The passphrase itself was never stored; with its slot gone, it
@@ -127,7 +118,6 @@ Short answer: for most threat models, yes. Precisely:
 - Caveat 2 — **backups**: any LUKS header backup (`luksHeaderBackup`) or
   full-disk image made while the passphrase slot existed contains that
   slot forever. The old passphrase opens those copies for eternity.
-- Caveat 3 — the **volume key never changes** through any of the above.
 
 If your threat model requires the old passphrase to be cryptographically
 worthless *no matter what survived where*, re-encrypt with a fresh volume
