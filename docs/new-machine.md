@@ -152,7 +152,7 @@ Available `core.*` options (see [modules/](../modules) for the source):
 
 | Option | What it enables |
 |---|---|
-| `core.desktop.enable` | Full graphical stack: niri, greetd/tuigreet (with a session menu — niri or a plain shell, so nobody is forced into a DE), XDG portals, pipewire, bluetooth, power management |
+| `core.desktop.enable` | A complete desktop environment for every user: niri + Noctalia with a system-wide default config (`/etc/niri/config.kdl`), greetd/tuigreet with a session menu (niri or a plain shell), XDG portals, pipewire, bluetooth, power management |
 | `core.fde.*` | FDE is mandatory (build-time assertion); `fido2.enable` for YubiKey unlock at boot; key management via standard tools (step 5, [docs/fde.md](fde.md)) |
 | `core.tailscale.enable` | tailscale daemon only; the admin runs `sudo tailscale up` / `down` by hand, never with an exit node (step 6) |
 | `core.nymvpn.enable` | NymVPN daemon and CLI; `core.nymvpn.autoconnect` (default on) brings the machine-wide tunnel up at boot (step 6) |
@@ -401,8 +401,19 @@ The first `up` prints an auth URL (or pass `--auth-key=tskey-…` from
 **On the target machine, as each user (not root).**
 
 Every user (including the admin) applies their own environment from their
-own dotfiles repo. A user without one can skip this — their account works
-bare — or start one now.
+own dotfiles repo. A user without one can skip this entirely — with
+`core.desktop.enable` they still get the full niri + Noctalia desktop
+(the system-wide default at `/etc/niri/config.kdl`), and changes they
+make in Noctalia's settings UI persist in their own
+`~/.config/noctalia/`.
+
+For a user with dotfiles, personalizing the desktop means shipping their
+own `~/.config/niri/config.kdl` — niri prefers it over the system file
+(no merging; the personal file replaces the baseline wholesale, so start
+from a copy of nixos-core's `modules/niri-default-config.kdl`). To
+*capture* Noctalia settings in git, symlink `~/.config/noctalia/settings.toml`
+into the repo working tree with home-manager's mkOutOfStoreSymlink — then
+the settings UI writes straight into the checkout.
 
 **If the user already has a dotfiles repo**
 ([nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) is the reference

@@ -5,15 +5,19 @@
   ...
 }:
 
-# Everything a graphical workstation needs at the system level: the niri
-# compositor, a login greeter, portals, audio, bluetooth, and power
-# management. User-level desktop config (noctalia, keybindings, terminal)
-# lives in each user's home-manager repo, gated by its own desktop option.
+# A complete desktop environment, system-owned and available to EVERY
+# user: niri + Noctalia (bar, launcher, lock, notifications) with a
+# working default config installed as /etc/niri/config.kdl. niri falls
+# back to that file when a user has no ~/.config/niri/config.kdl, so the
+# session works with zero per-user setup; a user's dotfiles personalize
+# it by shipping their own config.kdl (theirs replaces the system file
+# wholesale — no merging). Per-user Noctalia state (settings.toml etc.)
+# lives in each user's $HOME either way; dotfiles that want to capture it
+# use the mutable-config symlink pattern in the user repo.
 #
 # niri is AVAILABLE, not REQUIRED: the greeter offers a session menu (F2)
 # with niri and a plain "Shell" session that just runs the user's login
-# shell on the console, and remembers each user's last choice. A user
-# without a graphical setup (no dotfiles yet, or none wanted) picks Shell.
+# shell on the console, and remembers each user's last choice.
 let
   # A console session for the greeter. greetd runs Exec through the user's
   # login shell, so this lands in whatever shell the account has.
@@ -41,6 +45,9 @@ in
     hardware.graphics.enable = true;
 
     services.displayManager.sessionPackages = [ shellSession ];
+
+    # The system-wide baseline desktop config (see header comment).
+    environment.etc."niri/config.kdl".source = ./niri-default-config.kdl;
 
     services.greetd = {
       enable = true;
@@ -80,10 +87,13 @@ in
     services.power-profiles-daemon.enable = lib.mkDefault true;
     services.upower.enable = lib.mkDefault true;
 
-    ## ----- noctalia companions -------------------------------------------------
-    # Tools noctalia (the Wayland shell users run via home-manager) shells
-    # out to for screenshots, night light, and media keys.
+    ## ----- desktop shell + companions ------------------------------------------
+    # noctalia (from the overlay in flake.nix) and the tools the default
+    # config and noctalia shell out to: terminal, screenshots, night
+    # light, media keys.
     environment.systemPackages = with pkgs; [
+      noctalia
+      alacritty
       grim
       slurp
       satty

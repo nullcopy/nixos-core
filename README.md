@@ -23,7 +23,7 @@ flake.nix            # exports nixosModules.default and templates.machine
 modules/
   default.nix        # entry point — machine flakes import this
   base.nix           # always-on baseline (nix, gc, net, resolved, base pkgs), all mkDefault
-  desktop.nix        # core.desktop.enable — niri + greetd + portals + audio + bluetooth
+  desktop.nix        # core.desktop.enable — full DE: niri+noctalia baseline, greetd, audio
   fde.nix            # mandatory-FDE assertion + core.fde.fido2 YubiKey boot unlock
   tailscale.nix      # core.tailscale.enable — daemon only; manual `sudo tailscale up`
   nymvpn.nix         # core.nymvpn.enable — packaged nym-vpnd/vpnc + polkit + boot autoconnect
@@ -46,10 +46,14 @@ Everything opinionated is either overridable (opinionated values in
 without `mkForce`; list options like `environment.systemPackages` merge) or
 off until the machine enables it:
 
-- `core.desktop.enable` — full graphical stack: niri, greetd/tuigreet, XDG
-  portals, pipewire audio, bluetooth, power management, noctalia companion
-  tools. The greeter offers a session menu (niri or a plain shell), so
-  niri is available, not mandatory. Leave off for servers.
+- `core.desktop.enable` — a complete, system-owned desktop environment
+  every user can log into with zero setup: niri + Noctalia v5 with a
+  working default config at /etc/niri/config.kdl, plus greetd/tuigreet,
+  XDG portals, pipewire audio, bluetooth, power management. A user's
+  dotfiles personalize it by shipping their own ~/.config/niri/config.kdl
+  (it replaces the system file wholesale). The greeter offers a session
+  menu (niri or a plain shell), so the DE is available, not mandatory.
+  Leave off for servers.
 - `core.fde.*` — full-disk encryption is **mandatory**: the build fails if
   the initrd unlocks no LUKS volume (`core.fde.allowUnencrypted` is the
   discouraged escape hatch for throwaway VMs). Unlock methods are LUKS2
