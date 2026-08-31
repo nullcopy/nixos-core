@@ -405,15 +405,16 @@ own dotfiles repo. A user without one can skip this entirely — with
 `core.desktop.enable` they still get the full niri + Noctalia desktop
 (the system-wide default at `/etc/niri/config.kdl`), and changes they
 make in Noctalia's settings UI persist in their own
-`~/.config/noctalia/`.
+`~/.local/state/noctalia/settings.toml`.
 
 For a user with dotfiles, personalizing the desktop means shipping their
 own `~/.config/niri/config.kdl` — niri prefers it over the system file
 (no merging; the personal file replaces the baseline wholesale, so start
 from a copy of nixos-core's `modules/niri-default-config.kdl`). To
-*capture* Noctalia settings in git, symlink `~/.config/noctalia/settings.toml`
-into the repo working tree with home-manager's mkOutOfStoreSymlink — then
-the settings UI writes straight into the checkout.
+*capture* Noctalia settings in git, symlink
+`~/.local/state/noctalia/settings.toml` into the repo working tree with
+home-manager's mkOutOfStoreSymlink — then the settings UI writes straight
+into the checkout (nullcopy/dotfiles does exactly this).
 
 **If the user already has a dotfiles repo**
 ([nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) is the reference
