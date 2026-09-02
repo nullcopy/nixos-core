@@ -53,6 +53,11 @@ in
       };
     };
 
+    # Login through greetd unlocks the GNOME keyring, where Brave and
+    # other apps keep their secrets.
+    services.gnome.gnome-keyring.enable = true;
+    security.pam.services.greetd.enableGnomeKeyring = true;
+
     # programs.niri.enable configures the XDG portals
     # (niri-portals.conf selects the backends).
 
