@@ -59,7 +59,14 @@ in
     security.pam.services.greetd.enableGnomeKeyring = true;
 
     # programs.niri.enable configures the XDG portals
-    # (niri-portals.conf selects the backends).
+    # (niri-portals.conf selects the backends). The document portal
+    # mounts a FUSE filesystem through the setuid fusermount3 wrapper,
+    # which libfuse spawns via PATH lookup; without the wrapper dir on
+    # the unit's PATH the portal fails and degrades the user session.
+    systemd.user.services.xdg-document-portal.path = [
+      "/run/wrappers"
+      "/run/current-system/sw"
+    ];
 
     ## ----- audio -------------------------------------------------------------
     services.pulseaudio.enable = false;
