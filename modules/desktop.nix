@@ -53,8 +53,8 @@ in
       };
     };
 
-    # Login through greetd unlocks the GNOME keyring, where Brave and
-    # other apps keep their secrets.
+    # Login through greetd unlocks the GNOME keyring, where apps keep
+    # their secrets.
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.greetd.enableGnomeKeyring = true;
 
@@ -87,7 +87,6 @@ in
     environment.systemPackages = with pkgs; [
       noctalia
       alacritty
-      brave
       grim
       slurp
       satty
