@@ -163,7 +163,15 @@ in
           echo "  nym-vpnc account set '<mnemonic>' && sudo systemctl restart nym-vpn-autoconnect" >&2
           exit 0
         fi
-        if ! timeout 90 ${nym-vpnc} connect --wait; then
+        # A tunnel that is up already, as after a switch starts a failed
+        # unit again, is the wanted state. `connect --wait` waits for a
+        # state change, and a daemon that is connected sends none.
+        if ${nym-vpnc} status | grep -q '^State: Connected'; then
+          exit 0
+        fi
+        # Gateway selection retries for minutes on a bad start. The
+        # daemon keeps trying after this gives up.
+        if ! timeout 300 ${nym-vpnc} connect --wait; then
           echo "NymVPN connect failed; the daemon firewall stays up." >&2
           echo "Investigate: nym-vpnc status; journalctl -u nym-vpnd" >&2
           echo "Deliberate bypass: sudo systemctl stop nym-vpn-autoconnect nym-vpnd" >&2
