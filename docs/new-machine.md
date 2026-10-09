@@ -17,7 +17,7 @@ github:<user>/dotfiles              <- each user's home environment,
 ```
 
 - A machine repo is ~50 lines of config plus the generated hardware
-  config; [nixos-wisp](https://github.com/nullcopy/nixos-wisp) is a real
+  config; [nixos-aurora](https://github.com/nullcopy/nixos-aurora) is a real
   example.
 - Users apply their homes with standalone
   [home-manager](https://github.com/nix-community/home-manager) (step 7);
@@ -131,8 +131,8 @@ headless-server example:
 ```
 
 For a desktop or laptop, set `core.desktop.enable = true`.
-[nixos-wisp's configuration.nix](https://github.com/nullcopy/nixos-wisp/blob/main/configuration.nix)
-shows hardware-specific settings and the FIDO2 options in real use.
+[nixos-aurora's configuration.nix](https://github.com/nullcopy/nixos-aurora/blob/master/configuration.nix)
+shows the FIDO2 options in real use.
 
 The `core.*` options (source in [modules/](../modules)):
 
