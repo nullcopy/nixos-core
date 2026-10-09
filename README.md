@@ -30,6 +30,7 @@ templates/
 docs/
   new-machine.md     # full walkthrough: machine repo -> install -> users
   fde.md             # disk-unlock management: passphrases, YubiKeys, token-only
+  vpn.md             # VPN account setup and daily commands
 scripts/
   nixos-install.sh   # disk partitioning + install for a new machine
 ```
@@ -44,9 +45,9 @@ a machine enables it.
 - `core.fde.*` — FDE, mandatory via build assertion; `fido2.enable` adds
   YubiKey boot unlock ([docs/fde.md](docs/fde.md)).
 - `core.nymvpn.enable` — machine-wide NymVPN, connects at boot as the
-  default route.
+  default route ([docs/vpn.md](docs/vpn.md)).
 - `core.tailscale.enable` — tailscale daemon; the admin runs
-  `sudo tailscale up`, tailnet traffic only.
+  `sudo tailscale up`, tailnet traffic only ([docs/vpn.md](docs/vpn.md)).
 
 ## New machine setup
 
