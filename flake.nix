@@ -10,6 +10,15 @@
       url = "github:noctalia-dev/noctalia-shell?ref=v5.0.0-beta.10";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Obscura VPN's client is not in nixpkgs; its flake builds the daemon
+    # and CLI from source (see modules/obscura.nix). The tag pin makes
+    # updates manual.
+    obscura = {
+      url = "github:Sovereign-Engineering/obscuravpn-client?ref=v/1.182";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -17,6 +26,7 @@
       self,
       nixpkgs,
       noctalia,
+      obscura,
       ...
     }:
     let
@@ -24,11 +34,17 @@
       pkgs = nixpkgs.legacyPackages.${system};
     in
     {
-      # The library (see ./modules). The overlay makes pkgs.noctalia
-      # available to the modules (see modules/desktop.nix).
+      # The library (see ./modules). The overlays make pkgs.noctalia
+      # (modules/desktop.nix) and pkgs.obscura-cli (modules/obscura.nix)
+      # available to the modules.
       nixosModules.default = {
         imports = [ ./modules ];
-        nixpkgs.overlays = [ noctalia.overlays.default ];
+        nixpkgs.overlays = [
+          noctalia.overlays.default
+          (final: prev: {
+            obscura-cli = obscura.packages.${final.stdenv.hostPlatform.system}.rust-cli-bin;
+          })
+        ];
       };
 
       # Scaffold for a new machine repo:
