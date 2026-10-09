@@ -8,7 +8,7 @@ users**. It exports reusable modules and a template for per-machine repos.
 | Repo | Owns | Example |
 |---|---|---|
 | **nixos-core** (this repo) | Shared modules & options, machine template, install script | — |
-| **One repo per machine** | Hostname, hardware config, `core.*` toggles, user *accounts* | [nixos-wisp](https://github.com/nullcopy/nixos-wisp) |
+| **One repo per machine** | Hostname, hardware config, `core.*` toggles, user *accounts* | [nixos-aurora](https://github.com/nullcopy/nixos-aurora) |
 | **One repo per user** | That user's home environment via standalone home-manager | [nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) |
 
 Machine repos consume this repo as a flake input and pull updates with

@@ -9,7 +9,7 @@ walkthrough is in
    `MYADMIN` with this machine's hostname and admin user.
 2. Set the `core.*` toggles and machine-specific config in
    `configuration.nix`.
-   [nixos-wisp](https://github.com/nullcopy/nixos-wisp) is a complete
+   [nixos-aurora](https://github.com/nullcopy/nixos-aurora) is a complete
    real example.
 3. Install with nixos-core's `scripts/nixos-install.sh`.
 
