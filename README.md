@@ -24,7 +24,7 @@ modules/
   desktop.nix        # core.desktop.enable — full DE: niri+noctalia baseline, greetd, audio
   fde.nix            # mandatory-FDE assertion + core.fde.fido2 YubiKey boot unlock
   tailscale.nix      # core.tailscale.enable — daemon only; manual `sudo tailscale up`
-  nymvpn.nix         # core.nymvpn.enable — packaged nym-vpnd/vpnc + polkit + boot autoconnect
+  nymvpn.nix         # core.nymvpn.enable — packaged nym-vpnd/vpnc + polkit; manual `nym-vpnc connect`
 templates/
   machine/           # scaffold for a new machine repo
 docs/
@@ -44,8 +44,8 @@ a machine enables it.
   greetd, pipewire, bluetooth).
 - `core.fde.*` — FDE, mandatory via build assertion; `fido2.enable` adds
   YubiKey boot unlock ([docs/fde.md](docs/fde.md)).
-- `core.nymvpn.enable` — machine-wide NymVPN, connects at boot as the
-  default route ([docs/vpn.md](docs/vpn.md)).
+- `core.nymvpn.enable` — machine-wide NymVPN as the default route; the
+  admin runs `nym-vpnc connect` ([docs/vpn.md](docs/vpn.md)).
 - `core.tailscale.enable` — tailscale daemon; the admin runs
   `sudo tailscale up`, tailnet traffic only ([docs/vpn.md](docs/vpn.md)).
 

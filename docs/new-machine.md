@@ -100,7 +100,7 @@ headless-server example:
 
   ## What this machine gets from nixos-core (all default to off):
   core.desktop.enable = false;      # niri + greetd + audio + Wayland plumbing
-  core.nymvpn.enable = true;        # NymVPN: machine-wide tunnel at boot — see docs/vpn.md
+  core.nymvpn.enable = true;        # NymVPN: machine-wide tunnel, manual `nym-vpnc connect` — see docs/vpn.md
   core.tailscale.enable = true;     # tailscale daemon, manual `sudo tailscale up` — see docs/vpn.md
   # core.fde.fido2.enable = true;   # YubiKey disk unlock — see step 5
 
@@ -140,7 +140,7 @@ The `core.*` options (source in [modules/](../modules)):
 | `core.desktop.enable` | Complete desktop for every user: niri + Noctalia (default config `/etc/niri/config.kdl`), greetd session menu, pipewire, bluetooth |
 | `core.fde.*` | Mandatory FDE (build assertion); `fido2.enable` adds YubiKey boot unlock (step 5, [docs/fde.md](fde.md)) |
 | `core.tailscale.enable` | tailscale daemon; the admin runs `sudo tailscale up` / `down`, tailnet traffic only ([docs/vpn.md](vpn.md)) |
-| `core.nymvpn.enable` | NymVPN daemon + CLI; the machine-wide tunnel connects at boot ([docs/vpn.md](vpn.md)) |
+| `core.nymvpn.enable` | NymVPN daemon + CLI; the admin runs `nym-vpnc connect` / `disconnect`, machine-wide default route ([docs/vpn.md](vpn.md)) |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect
 without conflicts.
