@@ -101,6 +101,7 @@ headless-server example:
   ## What this machine gets from nixos-core (all default to off):
   core.desktop.enable = false;      # niri + greetd + audio + Wayland plumbing
   core.nymvpn.enable = true;        # NymVPN: machine-wide tunnel, manual `nym-vpnc connect` — see docs/vpn.md
+  core.obscura.enable = false;      # Obscura VPN instead of NymVPN: one of the two — see docs/vpn.md
   core.tailscale.enable = true;     # tailscale daemon, manual `sudo tailscale up` — see docs/vpn.md
   # core.fde.fido2.enable = true;   # YubiKey disk unlock — see step 5
 
@@ -141,6 +142,7 @@ The `core.*` options (source in [modules/](../modules)):
 | `core.fde.*` | Mandatory FDE (build assertion); `fido2.enable` adds YubiKey boot unlock (step 5, [docs/fde.md](fde.md)) |
 | `core.tailscale.enable` | tailscale daemon; the admin runs `sudo tailscale up` / `down`, tailnet traffic only ([docs/vpn.md](vpn.md)) |
 | `core.nymvpn.enable` | NymVPN daemon + CLI; the admin runs `nym-vpnc connect` / `disconnect`, machine-wide default route ([docs/vpn.md](vpn.md)) |
+| `core.obscura.enable` | Obscura VPN daemon + CLI; the admin runs `obscura connect` / `disconnect`, machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect
 without conflicts.
@@ -265,7 +267,7 @@ Then `sudo nixos-rebuild switch --flake ~/.nixos`, enroll a token, and
 reboot to test: token inserted → PIN + touch; token absent → passphrase
 prompt.
 
-## 6. Optional: VPNs (tailscale / NymVPN)
+## 6. Optional: VPNs (tailscale / NymVPN / Obscura)
 
 **On the target machine, as the admin user.**
 

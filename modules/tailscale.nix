@@ -8,7 +8,7 @@
 # Tailscale daemon. The admin connects with `sudo tailscale up
 # --login-server=...` and disconnects with `sudo tailscale down`.
 # Tailnet destinations only; all other traffic uses the default route
-# (NymVPN).
+# (the VPN tunnel).
 {
   options.core.tailscale.enable = lib.mkEnableOption "tailscale daemon (manual `sudo tailscale up`)";
 
@@ -19,7 +19,8 @@
     # this applies them to tailnet traffic (the subnet form of nym's
     # split-tunnel). The 0x14d/0xf42 constants are nym-internal and can
     # change in a nym release; the failure mode is blocked tailnet
-    # traffic.
+    # traffic. The obscura daemon exempts tailscale0 and tailscale's own
+    # marked traffic itself, so core.obscura needs no bridge.
     systemd.services.tailscale-nym-bridge = lib.mkIf config.core.nymvpn.enable {
       description = "Pass tailnet traffic through the NymVPN firewall";
       after = [ "tailscaled.service" ];
