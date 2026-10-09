@@ -13,11 +13,18 @@
 
     # Obscura VPN's client is not in nixpkgs; its flake builds the daemon
     # and CLI from source (see modules/obscura.nix). The tag pin makes
-    # updates manual. No nixpkgs.follows: the build uses the nixpkgs the
-    # release was made with. The rust-overlay revision it pins passes
-    # fetchurl an empty name, which newer nixpkgs takes literally, so the
-    # toolchain tarball fails to unpack.
-    obscura.url = "github:Sovereign-Engineering/obscuravpn-client?ref=v/1.182";
+    # updates manual. The rust-overlay revision the client pins predates
+    # a nixpkgs change to fetchurl's default name and fails to unpack
+    # the toolchain, so the client gets a current rust-overlay instead.
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    obscura = {
+      url = "github:Sovereign-Engineering/obscuravpn-client?ref=v/1.182";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+    };
   };
 
   outputs =
