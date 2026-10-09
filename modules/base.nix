@@ -24,9 +24,9 @@
   networking.networkmanager.enable = lib.mkDefault true;
   networking.firewall.enable = lib.mkDefault true;
 
-  # Both VPN daemons rewrite DNS. Without resolved, nym-vpnd overwrites
+  # The VPN daemons rewrite DNS. Without resolved, nym-vpnd overwrites
   # /etc/resolv.conf and a later `tailscale up` fails with "signature
-  # mismatch".
+  # mismatch"; the obscura daemon configures resolved over D-Bus.
   services.resolved.enable = lib.mkDefault true;
 
   ## ----- gpg -----------------------------------------------------------------

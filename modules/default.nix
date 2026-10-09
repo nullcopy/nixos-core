@@ -8,5 +8,6 @@
     ./fde.nix
     ./tailscale.nix
     ./nymvpn.nix
+    ./obscura.nix
   ];
 }

@@ -8,7 +8,7 @@ users**. It exports reusable modules and a template for per-machine repos.
 | Repo | Owns | Example |
 |---|---|---|
 | **nixos-core** (this repo) | Shared modules & options, machine template, install script | — |
-| **One repo per machine** | Hostname, hardware config, `core.*` toggles, user *accounts* | [nixos-wisp](https://github.com/nullcopy/nixos-wisp) |
+| **One repo per machine** | Hostname, hardware config, `core.*` toggles, user *accounts* | [nixos-aurora](https://github.com/nullcopy/nixos-aurora) |
 | **One repo per user** | That user's home environment via standalone home-manager | [nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) |
 
 Machine repos consume this repo as a flake input and pull updates with
@@ -24,12 +24,14 @@ modules/
   desktop.nix        # core.desktop.enable — full DE: niri+noctalia baseline, greetd, audio
   fde.nix            # mandatory-FDE assertion + core.fde.fido2 YubiKey boot unlock
   tailscale.nix      # core.tailscale.enable — daemon only; manual `sudo tailscale up`
-  nymvpn.nix         # core.nymvpn.enable — packaged nym-vpnd/vpnc + polkit + boot autoconnect
+  nymvpn.nix         # core.nymvpn.enable — packaged nym-vpnd/vpnc + polkit; manual `nym-vpnc connect`
+  obscura.nix        # core.obscura.enable — obscura daemon/CLI from its flake; manual `obscura connect`
 templates/
   machine/           # scaffold for a new machine repo
 docs/
   new-machine.md     # full walkthrough: machine repo -> install -> users
   fde.md             # disk-unlock management: passphrases, YubiKeys, token-only
+  vpn.md             # VPN account setup and daily commands
 scripts/
   nixos-install.sh   # disk partitioning + install for a new machine
 ```
@@ -43,10 +45,13 @@ a machine enables it.
   greetd, pipewire, bluetooth).
 - `core.fde.*` — FDE, mandatory via build assertion; `fido2.enable` adds
   YubiKey boot unlock ([docs/fde.md](docs/fde.md)).
-- `core.nymvpn.enable` — machine-wide NymVPN, connects at boot as the
-  default route.
+- `core.nymvpn.enable` — machine-wide NymVPN as the default route; the
+  admin runs `nym-vpnc connect` ([docs/vpn.md](docs/vpn.md)).
+- `core.obscura.enable` — machine-wide Obscura VPN as the default route;
+  the admin runs `obscura connect` ([docs/vpn.md](docs/vpn.md)).
+  Exclusive with `core.nymvpn.enable`.
 - `core.tailscale.enable` — tailscale daemon; the admin runs
-  `sudo tailscale up`, tailnet traffic only.
+  `sudo tailscale up`, tailnet traffic only ([docs/vpn.md](docs/vpn.md)).
 
 ## New machine setup
 

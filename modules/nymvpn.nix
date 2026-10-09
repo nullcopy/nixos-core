@@ -8,7 +8,9 @@
 # NymVPN daemon (nym-vpnd) and CLI client (nym-vpnc), packaged from the
 # official release binaries (nixpkgs carries only the mixnet tools).
 # One account per machine, stored in the daemon; the tunnel carries all
-# users' traffic. Setup and daily commands: docs/new-machine.md, step 6.
+# users' traffic. The daemon keeps a requested connection alive but
+# never initiates one: a wheel user runs `nym-vpnc connect`. Setup and
+# daily commands: docs/vpn.md.
 
 let
   # To update: bump version, then hash (from the release, or from the
@@ -74,21 +76,9 @@ let
   };
 
   cfg = config.core.nymvpn;
-  nym-vpnc = "${nym-vpn-core}/bin/nym-vpnc";
 in
 {
-  options.core.nymvpn = {
-    enable = lib.mkEnableOption "NymVPN daemon (nym-vpnd) and CLI client";
-
-    autoconnect = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = ''
-        Connect the tunnel at boot. Until the admin stores the account
-        (`nym-vpnc account set`), the service logs a hint and exits.
-      '';
-    };
-  };
+  options.core.nymvpn.enable = lib.mkEnableOption "NymVPN daemon (nym-vpnd) and CLI client";
 
   config = lib.mkIf cfg.enable {
     ## ----- packages ------------------------------------------------------------
@@ -98,8 +88,8 @@ in
     ];
 
     ## ----- polkit --------------------------------------------------------------
-    # Wheel users and root (the autoconnect service) get daemon access
-    # without a prompt; the auth_self default requires a polkit agent.
+    # Wheel users get daemon access without a prompt; the auth_self
+    # default requires a polkit agent.
     security.polkit = {
       enable = true;
       extraConfig = ''
@@ -137,50 +127,6 @@ in
         Restart = "always";
         RestartSec = 2;
       };
-    };
-
-    ## ----- autoconnect -----------------------------------------------------------
-    # nym-vpnd keeps a requested connection alive but never initiates
-    # one; this service requests the first connection at boot. Stop the
-    # unit to disconnect.
-    systemd.services.nym-vpn-autoconnect = lib.mkIf cfg.autoconnect {
-      description = "Connect the machine-wide NymVPN tunnel";
-      wantedBy = [ "multi-user.target" ];
-      requires = [ "nym-vpnd.service" ];
-      after = [ "nym-vpnd.service" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-      };
-      script = ''
-        # Wait for the nym-vpnd socket.
-        for _ in $(seq 1 30); do
-          ${nym-vpnc} status >/dev/null 2>&1 && break
-          sleep 1
-        done
-        if ! ${nym-vpnc} account get >/dev/null 2>&1; then
-          echo "No usable NymVPN account; skipping connect. A wheel user runs:" >&2
-          echo "  nym-vpnc account set '<mnemonic>' && sudo systemctl restart nym-vpn-autoconnect" >&2
-          exit 0
-        fi
-        # A tunnel that is up already, as after a switch starts a failed
-        # unit again, is the wanted state. `connect --wait` waits for a
-        # state change, and a daemon that is connected sends none.
-        if ${nym-vpnc} status | grep -q '^State: Connected'; then
-          exit 0
-        fi
-        # Gateway selection retries for minutes on a bad start. The
-        # daemon keeps trying after this gives up.
-        if ! timeout 300 ${nym-vpnc} connect --wait; then
-          echo "NymVPN connect failed; the daemon firewall stays up." >&2
-          echo "Investigate: nym-vpnc status; journalctl -u nym-vpnd" >&2
-          echo "Deliberate bypass: sudo systemctl stop nym-vpn-autoconnect nym-vpnd" >&2
-          exit 1
-        fi
-      '';
-      preStop = ''
-        ${nym-vpnc} disconnect || true
-      '';
     };
   };
 }

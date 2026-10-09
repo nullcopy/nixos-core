@@ -16,7 +16,8 @@
   ## ----- nixos-core toggles ------------------------------------------------
   # See modules/ in nixos-core for what each option enables.
   core.desktop.enable = false; # niri + greetd + audio + Wayland plumbing
-  core.nymvpn.enable = false; # NymVPN: machine-wide tunnel, connects at boot
+  core.nymvpn.enable = false; # NymVPN: machine-wide tunnel; the admin runs `nym-vpnc connect` manually
+  core.obscura.enable = false; # Obscura VPN: machine-wide tunnel; the admin runs `obscura connect` manually
   core.tailscale.enable = false; # tailscale daemon; the admin runs `sudo tailscale up` manually
 
   # Optional: FIDO2 token unlock of the root volume at boot. Enroll

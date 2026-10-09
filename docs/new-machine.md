@@ -17,7 +17,7 @@ github:<user>/dotfiles              <- each user's home environment,
 ```
 
 - A machine repo is ~50 lines of config plus the generated hardware
-  config; [nixos-wisp](https://github.com/nullcopy/nixos-wisp) is a real
+  config; [nixos-aurora](https://github.com/nullcopy/nixos-aurora) is a real
   example.
 - Users apply their homes with standalone
   [home-manager](https://github.com/nix-community/home-manager) (step 7);
@@ -100,8 +100,9 @@ headless-server example:
 
   ## What this machine gets from nixos-core (all default to off):
   core.desktop.enable = false;      # niri + greetd + audio + Wayland plumbing
-  core.nymvpn.enable = true;        # NymVPN: machine-wide tunnel at boot — see step 6
-  core.tailscale.enable = true;     # tailscale daemon, manual `sudo tailscale up` — see step 6
+  core.nymvpn.enable = true;        # NymVPN: machine-wide tunnel, manual `nym-vpnc connect` — see docs/vpn.md
+  core.obscura.enable = false;      # Obscura VPN instead of NymVPN: one of the two — see docs/vpn.md
+  core.tailscale.enable = true;     # tailscale daemon, manual `sudo tailscale up` — see docs/vpn.md
   # core.fde.fido2.enable = true;   # YubiKey disk unlock — see step 5
 
   ## Boot
@@ -130,8 +131,8 @@ headless-server example:
 ```
 
 For a desktop or laptop, set `core.desktop.enable = true`.
-[nixos-wisp's configuration.nix](https://github.com/nullcopy/nixos-wisp/blob/main/configuration.nix)
-shows hardware-specific settings and the FIDO2 options in real use.
+[nixos-aurora's configuration.nix](https://github.com/nullcopy/nixos-aurora/blob/master/configuration.nix)
+shows the FIDO2 options in real use.
 
 The `core.*` options (source in [modules/](../modules)):
 
@@ -139,8 +140,9 @@ The `core.*` options (source in [modules/](../modules)):
 |---|---|
 | `core.desktop.enable` | Complete desktop for every user: niri + Noctalia (default config `/etc/niri/config.kdl`), greetd session menu, pipewire, bluetooth |
 | `core.fde.*` | Mandatory FDE (build assertion); `fido2.enable` adds YubiKey boot unlock (step 5, [docs/fde.md](fde.md)) |
-| `core.tailscale.enable` | tailscale daemon; the admin runs `sudo tailscale up` / `down`, tailnet traffic only (step 6) |
-| `core.nymvpn.enable` | NymVPN daemon + CLI; the machine-wide tunnel connects at boot (step 6) |
+| `core.tailscale.enable` | tailscale daemon; the admin runs `sudo tailscale up` / `down`, tailnet traffic only ([docs/vpn.md](vpn.md)) |
+| `core.nymvpn.enable` | NymVPN daemon + CLI; the admin runs `nym-vpnc connect` / `disconnect`, machine-wide default route ([docs/vpn.md](vpn.md)) |
+| `core.obscura.enable` | Obscura VPN daemon + CLI; the admin runs `obscura connect` / `disconnect`, machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect
 without conflicts.
@@ -265,41 +267,13 @@ Then `sudo nixos-rebuild switch --flake ~/.nixos`, enroll a token, and
 reboot to test: token inserted → PIN + touch; token absent → passphrase
 prompt.
 
-## 6. Optional: VPNs (tailscale / NymVPN)
+## 6. Optional: VPNs (tailscale / NymVPN / Obscura)
 
 **On the target machine, as the admin user.**
 
 VPN membership is machine policy; only the admin configures it, and a
-login works without any VPN credentials.
-
-- **NymVPN** is the machine's default route; the tunnel starts at every
-  boot, before any login.
-- **tailscale** carries tailnet destinations (`100.64.0.0/10`, MagicDNS)
-  only, and only after the admin runs `sudo tailscale up`.
-
-**NymVPN** (`core.nymvpn.enable`): store the machine account once, then
-restart the service; every later boot connects automatically:
-
-```sh
-read -rs MNEMONIC                  # paste the account mnemonic (stays out of shell history)
-nym-vpnc account set "$MNEMONIC"   # stored daemon-side, machine-wide
-sudo systemctl restart nym-vpn-autoconnect
-nym-vpnc status
-```
-
-`sudo systemctl stop nym-vpn-autoconnect` disconnects until the next
-boot.
-
-**tailscale** (`core.tailscale.enable`): enroll and connect manually:
-
-```sh
-sudo tailscale up --login-server=https://your.headscale.example
-sudo tailscale down                                # when done
-```
-
-The first `up` prints an auth URL (or pass `--auth-key=tskey-…` from
-`headscale preauthkeys create`); tailscaled stores the enrollment, so
-later `up` commands connect immediately.
+login works without any VPN credentials. The account setup and the
+daily commands for each VPN are in [docs/vpn.md](vpn.md).
 
 ## 7. Each user sets up their home
 
