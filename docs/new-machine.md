@@ -142,7 +142,7 @@ The `core.*` options (source in [modules/](../modules)):
 | `core.fde.*` | Mandatory FDE (build assertion); `fido2.enable` adds YubiKey boot unlock (step 5, [docs/fde.md](fde.md)) |
 | `core.tailscale.enable` | tailscale daemon; the admin runs `sudo tailscale up` / `down`, tailnet traffic only ([docs/vpn.md](vpn.md)) |
 | `core.nymvpn.enable` | NymVPN daemon + CLI; the admin runs `nym-vpnc connect` / `disconnect`, machine-wide default route ([docs/vpn.md](vpn.md)) |
-| `core.obscura.enable` | Obscura VPN daemon + CLI; the admin runs `obscura connect` / `disconnect`, machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
+| `core.obscura.enable` | Obscura VPN daemon + CLI; no network egress after boot until the admin runs `obscura connect`, then machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect
 without conflicts.
