@@ -16,7 +16,7 @@
   ## ----- nixos-core toggles ------------------------------------------------
   # See modules/ in nixos-core for what each option enables.
   core.desktop.enable = false; # niri + greetd + audio + Wayland plumbing
-  core.nymvpn.enable = false; # NymVPN: machine-wide tunnel; the admin runs `nym-vpnc connect` manually
+  core.nymvpn.enable = false; # NymVPN: machine-wide tunnel; no egress until the admin runs `nym-vpnc connect`
   core.obscura.enable = false; # Obscura VPN: machine-wide tunnel; no egress until the admin runs `obscura connect`
   core.tailscale.enable = false; # tailscale daemon; the admin runs `sudo tailscale up` manually
 

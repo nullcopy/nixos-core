@@ -7,7 +7,8 @@ VPN membership is machine policy; only the admin configures it, and a
 login works without any VPN credentials.
 
 - **NymVPN** is the machine's default route once the admin runs
-  `nym-vpnc connect`; nothing connects at boot.
+  `nym-vpnc connect`; nothing connects at boot, and the machine has no
+  network egress until that first connect.
 - **Obscura** is the machine's default route once the admin runs
   `obscura connect`; nothing connects at boot, and the machine has no
   network egress until that first connect. A machine enables NymVPN or
@@ -35,6 +36,21 @@ nym-vpnc disconnect                # when done
 
 Gateway selection can retry for minutes on a bad start; `journalctl -u
 nym-vpnd` shows what it is doing.
+
+The daemon installs its firewall only once a connect is requested.
+Before that the `nym-vpn-gate` unit blocks all egress except the
+daemon's own traffic, tailscale's tunnel traffic, DHCP, IPv6 neighbor
+discovery and the local network; it lifts once the tunnel is up and
+stays lifted until the next boot, so a `disconnect` leaves traffic
+outside the tunnel. Name lookups are blocked for everything but the
+daemon, so `sudo tailscale up` against a hostname needs the tunnel up
+or the gate lifted. A failed `connect` leaves the gate in place.
+
+To lift the gate without connecting, for the rest of the boot:
+
+```sh
+sudo systemctl stop nym-vpn-gate
+```
 
 ## Obscura (`core.obscura.enable`)
 
