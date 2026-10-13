@@ -7,10 +7,12 @@ VPN membership is machine policy; only the admin configures it, and a
 login works without any VPN credentials.
 
 - **NymVPN** is the machine's default route once the admin runs
-  `nym-vpnc connect`; nothing connects at boot.
+  `nym-vpnc connect`; nothing connects at boot, and the machine has no
+  network egress until that first connect.
 - **Obscura** is the machine's default route once the admin runs
-  `obscura connect`; nothing connects at boot. A machine enables NymVPN
-  or Obscura, not both.
+  `obscura connect`; nothing connects at boot, and the machine has no
+  network egress until that first connect. A machine enables NymVPN or
+  Obscura, not both.
 - **tailscale** carries tailnet destinations (`100.64.0.0/10`, MagicDNS)
   only, and only after the admin runs `sudo tailscale up`.
 
@@ -35,6 +37,21 @@ nym-vpnc disconnect                # when done
 Gateway selection can retry for minutes on a bad start; `journalctl -u
 nym-vpnd` shows what it is doing.
 
+The daemon installs its firewall only once a connect is requested.
+Before that the `nym-vpn-gate` unit blocks all egress except the
+daemon's own traffic, tailscale's tunnel traffic, DHCP, IPv6 neighbor
+discovery and the local network; it lifts once the tunnel is up and
+stays lifted until the next boot, so a `disconnect` leaves traffic
+outside the tunnel. Name lookups are blocked for everything but the
+daemon, so `sudo tailscale up` against a hostname needs the tunnel up
+or the gate lifted. A failed `connect` leaves the gate in place.
+
+To lift the gate without connecting, for the rest of the boot:
+
+```sh
+sudo systemctl stop nym-vpn-gate
+```
+
 ## Obscura (`core.obscura.enable`)
 
 The daemon's socket is open to group `obscura`; every wheel user is a
@@ -55,9 +72,22 @@ obscura disconnect                 # when done
 ```
 
 The daemon's kill switch exists only while it connects or is connected.
-Before the first `connect` and after a `disconnect`, traffic leaves the
-machine outside the tunnel. `journalctl -u obscura` shows what the
-daemon is doing.
+Before the first `connect` the `obscura-gate` unit blocks all egress
+except the daemon's own traffic, tailscale's tunnel traffic, DHCP, IPv6
+neighbor discovery and the local network; it lifts once the tunnel is
+up and stays lifted until the next boot, so a `disconnect` leaves
+traffic outside the tunnel. Name lookups are blocked, the daemon's
+included: it connects from a cached API address, and if that goes
+stale, `login` and `connect` fail until the gate is lifted. `sudo
+tailscale up` against a hostname also needs the tunnel up or the gate
+lifted. A failed `connect` leaves the gate in place; `journalctl -u
+obscura` shows what the daemon is doing.
+
+To lift the gate without connecting, for the rest of the boot:
+
+```sh
+sudo systemctl stop obscura-gate
+```
 
 ## tailscale (`core.tailscale.enable`)
 
