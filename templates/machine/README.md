@@ -5,10 +5,11 @@ Per-machine NixOS flake, built on
 walkthrough is in
 [nixos-core/docs/new-machine.md](https://github.com/nullcopy/nixos-core/blob/main/docs/new-machine.md).
 
-nixos-core's `scripts/nixos-install.sh` creates this repo at `~/.nixos`
-on the machine, fills in the hostname and the admin user, generates
-`hardware-configuration.nix`, and activates the pre-commit format hook.
-The repo lives on the machine only and has no remote.
+nixos-core's `scripts/nixos-install.sh` creates this repo at `/etc/nixos`
+on the machine, owned by the admin user, with the hostname and the admin
+user filled in, `hardware-configuration.nix` generated, and the
+pre-commit format hook active. The repo lives on the machine only and
+has no remote.
 
 - `configuration.nix` — `core.*` toggles, accounts, machine-specific
   config

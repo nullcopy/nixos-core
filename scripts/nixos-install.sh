@@ -94,10 +94,11 @@ mount -o umask=0077 "$BOOT" /mnt/boot
 PATH="$(dirname "$(nix-shell -p git --run 'command -v git')"):$PATH"
 nix() { command nix --extra-experimental-features 'nix-command flakes' "$@"; }
 
-# The machine repo lives in the admin's home ($HOME keeps daily git work
-# sudo-free). install -d 0700: git alone would create the home 0755.
-TARGET="/mnt/home/$ADMINUSER/.nixos"
-install -d -m 700 "$(dirname "$TARGET")"
+# The machine repo goes to /etc/nixos, where nixos-rebuild looks by
+# default. The admin owns it (chown below), so git and `nixos-rebuild
+# switch --sudo` run as the admin.
+TARGET="/mnt/etc/nixos"
+mkdir -p "$(dirname "$TARGET")"
 
 # Stage everything in the repo and commit when something changed, with
 # an explicit identity (the live ISO has none).
@@ -184,8 +185,8 @@ nixos-install --flake "path:$TARGET#$HOSTNAME" --no-root-password
 echo ">>> Setting password for '$ADMINUSER':"
 nixos-enter --root /mnt -- passwd "$ADMINUSER"
 
-# The repo was written as root; hand the home to the now-existing admin.
-nixos-enter --root /mnt -- chown -R "$ADMINUSER:users" "/home/$ADMINUSER"
+# The repo was written as root; hand it to the now-existing admin.
+nixos-enter --root /mnt -- chown -R "$ADMINUSER:users" /etc/nixos
 
 umount -R /mnt
 cryptsetup close cryptroot

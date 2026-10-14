@@ -42,6 +42,15 @@
   # root` shows "L").
   users.users.root.hashedPassword = lib.mkDefault "!";
 
+  ## ----- git -----------------------------------------------------------------
+  # The machine repo at /etc/nixos is owned by the admin. The exception
+  # lets root read it too, for `sudo nixos-rebuild switch`; Nix honors
+  # it like git does.
+  programs.git = {
+    enable = lib.mkDefault true;
+    config.safe.directory = "/etc/nixos";
+  };
+
   ## ----- shells --------------------------------------------------------------
   # System-level zsh puts zsh in /etc/shells as a valid login shell.
   programs.zsh.enable = lib.mkDefault true;
@@ -49,7 +58,6 @@
   ## ----- packages ------------------------------------------------------------
   environment.systemPackages = with pkgs; [
     vim
-    git
     curl
     wget
     bottom

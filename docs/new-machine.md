@@ -50,7 +50,7 @@ The install script:
    fresh scaffold). Confirms with `YES`, erases and partitions the disk,
    and asks for the **disk passphrase** (this unlocks the machine at
    every boot).
-2. Creates the machine repo at `/mnt/home/<ADMINUSER>/.nixos` from the
+2. Creates the machine repo at `/mnt/etc/nixos` from the
    nixos-core template with `HOSTNAME` and `ADMINUSER` filled in,
    generates `hardware-configuration.nix`, creates `flake.lock`, and
    commits it all with the pre-commit hook active.
@@ -141,7 +141,7 @@ The machine repo lives only on the machine, so copy it off before
 wiping the disk. A bundle holds the whole history in one file:
 
 ```sh
-git -C ~/.nixos bundle create /run/media/<user>/<stick>/fern.bundle --all
+git -C /etc/nixos bundle create /run/media/<user>/<stick>/fern.bundle --all
 ```
 
 In the live environment, answer the script's repo prompt with that file
@@ -160,9 +160,9 @@ the previous attempt first. If it failed *after* the machine repo was
 written, you can finish manually — the disk is still mounted at `/mnt`:
 
 ```sh
-nixos-install --flake "path:/mnt/home/<ADMINUSER>/.nixos#<HOSTNAME>" --no-root-password
+nixos-install --flake "path:/mnt/etc/nixos#<HOSTNAME>" --no-root-password
 nixos-enter --root /mnt -- passwd <ADMINUSER>
-nixos-enter --root /mnt -- chown -R <ADMINUSER>:users /home/<ADMINUSER>
+nixos-enter --root /mnt -- chown -R <ADMINUSER>:users /etc/nixos
 umount -R /mnt && cryptsetup close cryptroot
 ```
 
@@ -170,13 +170,14 @@ umount -R /mnt && cryptsetup close cryptroot
 
 **On the target machine, as the admin user.**
 
-The machine repo is at `~/.nixos`, owned by you; only the rebuild needs
-sudo.
+The machine repo is at `/etc/nixos`, owned by you. Git runs as you.
+`nixos-rebuild switch --sudo` evaluates and builds as you and uses sudo
+for the activation only.
 
 ```sh
-cd ~/.nixos
-git log --oneline                            # the installer's commits
-sudo nixos-rebuild switch --flake ~/.nixos   # should be a no-op right now
+cd /etc/nixos
+git log --oneline                # the installer's commits
+nixos-rebuild switch --sudo      # should be a no-op right now
 ```
 
 - The pre-commit hook is active in this repo; in a clone made some other
@@ -210,7 +211,7 @@ core.fde.fido2.enable = true;
 #   boot.initrd.luks.devices.nixos-enc.device = "/dev/nvme0n1p2";
 ```
 
-Then `sudo nixos-rebuild switch --flake ~/.nixos`, enroll a token, and
+Then `nixos-rebuild switch --sudo`, enroll a token, and
 reboot to test: token inserted → PIN + touch; token absent → passphrase
 prompt.
 
@@ -298,8 +299,8 @@ home-manager selects the `<user>@<hostname>` entry automatically.
 ## 7. Routine tasks
 
 ```sh
-sudo nixos-rebuild switch --flake ~/.nixos    # apply machine changes
-nix flake update core                        # (in ~/.nixos) pull nixos-core improvements
+nixos-rebuild switch --sudo                  # apply machine changes
+nix flake update core                        # (in /etc/nixos) pull nixos-core improvements
 nix flake update                             # bump everything (core + nixpkgs)
 home-manager switch --flake ~/.dotfiles      # apply home changes (per user)
 ```
@@ -310,6 +311,3 @@ home-manager switch --flake ~/.dotfiles      # apply home changes (per user)
   `nixosConfigurations.<name>` attribute must equal the hostname.
 - **A `core.*` change does not arrive on a machine**: machine repos pin
   core in `flake.lock`; run `nix flake update core` on that machine.
-- **`git` reports dubious ownership**: plain git work needs no sudo. For
-  root's git during a rebuild, run once:
-  `sudo git config --global --add safe.directory ~/.nixos`.

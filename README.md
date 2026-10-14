@@ -8,7 +8,7 @@ users**. It exports reusable modules and a template for per-machine repos.
 | Repo | Owns | Example |
 |---|---|---|
 | **nixos-core** (this repo) | Shared modules & options, machine template, install script | — |
-| **One repo per machine** | Hostname, hardware config, `core.*` toggles, user *accounts* | `~/.nixos` on that machine |
+| **One repo per machine** | Hostname, hardware config, `core.*` toggles, user *accounts* | `/etc/nixos` on that machine |
 | **One repo per user** | That user's home environment via standalone home-manager | [nullcopy/dotfiles](https://github.com/nullcopy/dotfiles) |
 
 Machine repos consume this repo as a flake input and pull updates with
@@ -65,8 +65,8 @@ The summary is:
 1. Start the NixOS live ISO. Download `scripts/nixos-install.sh` and
    run it as root. The script asks for the disk, the hostname and the
    admin user, partitions the disk, creates the machine repo from the
-   template in the admin's `~/.nixos`, opens a shell to set the `core.*`
-   toggles, and installs the system.
+   template in `/etc/nixos`, owned by the admin, opens a shell to set
+   the `core.*` toggles, and installs the system.
 2. After the first boot, each user clones their own dotfiles repo. Each
    user applies it with standalone home-manager.
 
@@ -75,7 +75,7 @@ The summary is:
 Use these commands in a **machine repo**:
 
 ```
-sudo nixos-rebuild switch --flake ~/.nixos   # apply config edits
+nixos-rebuild switch --sudo                  # apply config edits
 nix flake update core                        # pull nixos-core updates, then rebuild
 nix flake update                             # bump everything, then rebuild
 ```
