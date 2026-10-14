@@ -5,13 +5,16 @@ Per-machine NixOS flake, built on
 walkthrough is in
 [nixos-core/docs/new-machine.md](https://github.com/nullcopy/nixos-core/blob/main/docs/new-machine.md).
 
-1. Replace `MYHOSTNAME` (in `flake.nix` and `configuration.nix`) and
-   `MYADMIN` with this machine's hostname and admin user.
-2. Set the `core.*` toggles and machine-specific config in
-   `configuration.nix`.
-   [nixos-aurora](https://github.com/nullcopy/nixos-aurora) is a complete
-   real example.
-3. Install with nixos-core's `scripts/nixos-install.sh`.
+nixos-core's `scripts/nixos-install.sh` creates this repo at `~/.nixos`
+on the machine, fills in the hostname and the admin user, generates
+`hardware-configuration.nix`, and activates the pre-commit format hook.
+The repo lives on the machine only and has no remote.
 
-The install script activates the pre-commit format hook. On any other
-clone, run `git config core.hooksPath .githooks` one time.
+- `configuration.nix` — `core.*` toggles, accounts, machine-specific
+  config
+- `hardware-configuration.nix` — generated at install
+- `flake.nix` — consumes nixos-core as `core`; `flake.lock` pins it
+  (`nix flake update core`)
+
+In a clone made some other way, run
+`git config core.hooksPath .githooks` once.
