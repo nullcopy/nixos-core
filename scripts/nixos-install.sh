@@ -1,21 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-### CONFIG ###
-DISK=/dev/nvme0n1
-MACHINE_REPO="https://github.com/nullcopy/nixos-myhostname" # this machine's flake repo (from the nixos-core template)
-HOSTNAME="myhostname" # must match nixosConfigurations.<name> in the machine flake
-ADMINUSER="myAdminUser"       # wheel-group user declared in the machine's configuration.nix
-##############
+CORE="github:nullcopy/nixos-core" # the flake that provides the machine template
 
 [[ $EUID -eq 0 ]] || {
   echo "Run as root."
   exit 1
 }
-[[ -b "$DISK" ]] || {
-  echo "Disk not found: $DISK"
-  exit 1
-}
+
+# Prompts with readline editing; Tab completes paths at the disk and
+# repo prompts. -e 7 hides loop devices.
+echo "Disks:"
+lsblk -dno PATH,SIZE,MODEL -e 7
+while :; do
+  read -e -r -p "Disk to erase and install to: " -i /dev/ DISK
+  [[ -b "$DISK" && "$(lsblk -dno TYPE "$DISK")" == disk ]] && break
+  echo "Not a whole disk: $DISK"
+done
+while :; do
+  read -e -r -p "Hostname (networking.hostName and the nixosConfigurations.<name> attribute): " HOSTNAME
+  [[ "$HOSTNAME" =~ ^[a-z0-9-]+$ ]] && break
+  echo "Use lowercase letters, digits and hyphens."
+done
+while :; do
+  read -e -r -p "Admin user (wheel group; owns the machine repo): " ADMINUSER
+  [[ "$ADMINUSER" =~ ^[a-z_][a-z0-9_-]*$ ]] && break
+  echo "Use a lowercase user name."
+done
+# Empty: scaffold a new machine repo from nixos-core's template. For a
+# reinstall, name the machine's existing repo instead: anything `git
+# clone` accepts, such as a directory on a USB stick or a git bundle.
+read -e -r -p "Existing machine repo to clone (empty for a fresh scaffold): " MACHINE_REPO
 
 echo "!!! This will completely erase $DISK. Type YES (all capitals) to continue:"
 read -r confirm
@@ -75,29 +90,54 @@ mount -o subvol=@snapshots,$OPTS /dev/mapper/cryptroot /mnt/.snapshots
 # hardware-configuration.nix.
 mount -o umask=0077 "$BOOT" /mnt/boot
 
-# Clone the machine flake into the admin's home ($HOME keeps daily git
-# work sudo-free) and write the hardware configuration into it.
-# install -d 0700: git clone alone creates the home 0755.
-TARGET="/mnt/home/$ADMINUSER/.nixos"
-install -d -m 700 "$(dirname "$TARGET")"
-nix-shell -p git --run "git clone '$MACHINE_REPO' '$TARGET'"
+# The live ISO ships without git; take one from the ISO's nixpkgs.
+PATH="$(dirname "$(nix-shell -p git --run 'command -v git')"):$PATH"
+nix() { command nix --extra-experimental-features 'nix-command flakes' "$@"; }
+
+# The machine repo goes to /etc/nixos, where nixos-rebuild looks by
+# default. The admin owns it (chown below), so git and `nixos-rebuild
+# switch --sudo` run as the admin.
+TARGET="/mnt/etc/nixos"
+mkdir -p "$(dirname "$TARGET")"
+
+# Stage everything in the repo and commit when something changed, with
+# an explicit identity (the live ISO has none).
+commit() { # MESSAGE
+  git -C "$TARGET" add -A
+  [[ -z "$(git -C "$TARGET" status --porcelain)" ]] ||
+    git -C "$TARGET" -c "user.name=$ADMINUSER" -c "user.email=$ADMINUSER@$HOSTNAME" \
+      commit -q -m "$1"
+}
+
+if [[ -n "$MACHINE_REPO" ]]; then
+  git clone "$MACHINE_REPO" "$TARGET"
+  git -C "$TARGET" config core.hooksPath .githooks
+else
+  # Scaffold from the template and fill in the placeholders. `nix flake
+  # init` writes every file without its executable bit, and git ignores
+  # a hook it cannot execute. The hook path is set before the first
+  # commit so the nixfmt pre-commit hook covers every commit.
+  mkdir "$TARGET"
+  (cd "$TARGET" && nix flake init -t "$CORE#machine")
+  chmod +x "$TARGET/.githooks/pre-commit"
+  sed -i "s/MYHOSTNAME/$HOSTNAME/g; s/MYADMIN/$ADMINUSER/g" \
+    "$TARGET/flake.nix" "$TARGET/configuration.nix"
+  git -C "$TARGET" init -q -b main
+  git -C "$TARGET" config core.hooksPath .githooks
+  commit "Scaffold $HOSTNAME from the nixos-core machine template"
+fi
+
 nixos-generate-config --root /mnt --show-hardware-config \
   >"$TARGET/hardware-configuration.nix"
 
-# Lock the flake first: nixos-install hashes the repo directory, and a
-# lock file created mid-install changes the hash ("NAR hash mismatch").
-nix --extra-experimental-features 'nix-command flakes' flake lock "path:$TARGET"
-
-# Commit both with an explicit identity (the live ISO has none) and
-# activate the nixfmt pre-commit hook.
-nix-shell -p git --run "
-  git -C '$TARGET' config core.hooksPath .githooks &&
-  git -C '$TARGET' add hardware-configuration.nix flake.lock &&
-  git -C '$TARGET' -c user.name='$ADMINUSER' -c user.email='$ADMINUSER@$HOSTNAME' \
-    commit -q -m 'Add hardware configuration and lock for $HOSTNAME'"
+# Lock the flake before the install: nixos-install hashes the repo
+# directory, and a lock file created mid-install changes the hash
+# ("NAR hash mismatch").
+nix flake lock "path:$TARGET"
+commit "Add hardware configuration and lock for $HOSTNAME"
 
 echo
-echo ">>> hardware-configuration.nix generated, flake.lock created, both committed in $TARGET/"
+echo ">>> machine repo ready in $TARGET/: hardware-configuration.nix generated, flake.lock created, both committed"
 
 # Advisory checks for the errors that otherwise appear late, inside
 # nixos-install.
@@ -115,14 +155,21 @@ check "$TARGET/flake.nix" "nixosConfigurations\.$HOSTNAME([^A-Za-z0-9_-]|$)" \
 check "$TARGET/configuration.nix" "users\.users\.$ADMINUSER([^A-Za-z0-9_-]|$)" \
   "users.users.$ADMINUSER is declared in configuration.nix"
 
-# Optional review shell: bash on /dev/tty, exit status ignored so a
-# failure here survives set -e.
+# Review shell: bash on /dev/tty, exit status ignored so a failure here
+# survives set -e. A fresh scaffold has every core.* toggle off, so this
+# is where configuration.nix gets its settings. Edits are committed.
 echo
-echo ">>> Open a shell in $TARGET to review or edit before installing? [y/N]"
+if [[ -z "$MACHINE_REPO" ]]; then
+  echo ">>> The scaffold has every core.* toggle off. Open a shell in $TARGET"
+  echo ">>> to edit configuration.nix before installing? [Y/n]"
+else
+  echo ">>> Open a shell in $TARGET to review or edit before installing? [Y/n]"
+fi
 read -r reply
-if [[ "$reply" =~ ^[Yy] ]]; then
+if [[ ! "$reply" =~ ^[Nn] ]]; then
   echo ">>> Type 'exit' to continue the install."
   (cd "$TARGET" && bash -i </dev/tty >/dev/tty 2>&1) || true
+  commit "Configure $HOSTNAME"
 fi
 
 echo ">>> Proceed with nixos-install? Type YES (all capitals) to continue:"
@@ -138,8 +185,8 @@ nixos-install --flake "path:$TARGET#$HOSTNAME" --no-root-password
 echo ">>> Setting password for '$ADMINUSER':"
 nixos-enter --root /mnt -- passwd "$ADMINUSER"
 
-# The clone ran as root; hand the home to the now-existing admin.
-nixos-enter --root /mnt -- chown -R "$ADMINUSER:users" "/home/$ADMINUSER"
+# The repo was written as root; hand it to the now-existing admin.
+nixos-enter --root /mnt -- chown -R "$ADMINUSER:users" /etc/nixos
 
 umount -R /mnt
 cryptsetup close cryptroot
