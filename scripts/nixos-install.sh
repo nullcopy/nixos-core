@@ -31,6 +31,13 @@ done
 # reinstall, name the machine's existing repo instead: anything `git
 # clone` accepts, such as a directory on a USB stick or a git bundle.
 read -e -r -p "Existing machine repo to clone (empty for a fresh scaffold): " MACHINE_REPO
+SSH=false
+if [[ -z "$MACHINE_REPO" ]]; then
+  read -r -p "Enable ssh (key-only; keys go in ~/.ssh/authorized_keys)? [y/N] " reply
+  if [[ "$reply" =~ ^[Yy] ]]; then
+    SSH=true
+  fi
+fi
 
 echo "!!! This will completely erase $DISK. Type YES (all capitals) to continue:"
 read -r confirm
@@ -122,6 +129,8 @@ else
   chmod +x "$TARGET/.githooks/pre-commit"
   sed -i "s/MYHOSTNAME/$HOSTNAME/g; s/MYADMIN/$ADMINUSER/g" \
     "$TARGET/flake.nix" "$TARGET/configuration.nix"
+  sed -i "s/^\(\s*services\.openssh\.enable = \)false;/\1$SSH;/" \
+    "$TARGET/configuration.nix"
   git -C "$TARGET" init -q -b main
   git -C "$TARGET" config core.hooksPath .githooks
   commit "Scaffold $HOSTNAME from the nixos-core machine template"
