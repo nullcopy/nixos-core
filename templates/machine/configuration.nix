@@ -41,6 +41,14 @@
     ];
   };
 
+  ## ----- ssh -----------------------------------------------------------------
+  # Key-only logins; each user's keys live in ~/.ssh/authorized_keys.
+  services.openssh.enable = false;
+  services.openssh.settings = {
+    PasswordAuthentication = false;
+    PermitRootLogin = "no";
+  };
+
   ## ----- machine-specific extras ----------------------------------------------
   # environment.systemPackages = with pkgs; [ ];
 

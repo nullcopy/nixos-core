@@ -46,10 +46,10 @@ sudo bash nixos-install.sh
 The install script:
 
 1. Asks for the disk (listed first; Tab completes under `/dev`), the
-   hostname, the admin user, and an existing repo to clone (empty for a
-   fresh scaffold). Confirms with `YES`, erases and partitions the disk,
-   and asks for the **disk passphrase** (this unlocks the machine at
-   every boot).
+   hostname, the admin user, an existing repo to clone (empty for a
+   fresh scaffold), and whether to enable ssh. Confirms with `YES`,
+   erases and partitions the disk, and asks for the **disk passphrase**
+   (this unlocks the machine at every boot).
 2. Creates the machine repo at `/mnt/etc/nixos` from the
    nixos-core template with `HOSTNAME` and `ADMINUSER` filled in,
    generates `hardware-configuration.nix`, creates `flake.lock`, and
@@ -63,8 +63,8 @@ The install script:
 
 ### configuration.nix
 
-The scaffold declares the hostname and the admin account and has every
-`core.*` toggle off. Set the toggles in the review shell (`vim
+The scaffold declares the hostname and the admin account, enables ssh
+when asked for, and has every `core.*` toggle off. Set the toggles in the review shell (`vim
 configuration.nix`), or later from the installed system followed by a
 rebuild. `flake.nix` needs no edits: it defines
 `nixosConfigurations.<hostname>` and pins nixos-core.
@@ -103,9 +103,15 @@ A complete headless-server example:
     shell = pkgs.zsh;
   };
 
+  ## ssh: key-only logins; keys live in each user's ~/.ssh/authorized_keys
+  services.openssh.enable = true;
+  services.openssh.settings = {
+    PasswordAuthentication = false;
+    PermitRootLogin = "no";
+  };
+
   ## Anything machine-specific goes here too:
   # environment.systemPackages = with pkgs; [ htop ];
-  # services.openssh.enable = true;
 
   ## First NixOS version installed on this machine. Never bump on an
   ## existing install.

@@ -63,10 +63,11 @@ The full walkthrough is in [docs/new-machine.md](docs/new-machine.md).
 The summary is:
 
 1. Start the NixOS live ISO. Download `scripts/nixos-install.sh` and
-   run it as root. The script asks for the disk, the hostname and the
-   admin user, partitions the disk, creates the machine repo from the
-   template in `/etc/nixos`, owned by the admin, opens a shell to set
-   the `core.*` toggles, and installs the system.
+   run it as root. The script asks for the disk, the hostname, the
+   admin user and whether to enable ssh, partitions the disk, creates
+   the machine repo from the template in `/etc/nixos`, owned by the
+   admin, opens a shell to set the `core.*` toggles, and installs the
+   system.
 2. After the first boot, each user clones their own dotfiles repo. Each
    user applies it with standalone home-manager.
 
