@@ -30,11 +30,20 @@
   services.resolved.enable = lib.mkDefault true;
 
   ## ----- gpg -----------------------------------------------------------------
+  # The extra socket is the one a user forwards over ssh, so a commit on
+  # another machine signs with the key behind this agent.
   programs.gnupg.agent = {
     enable = lib.mkDefault true;
+    enableExtraSocket = lib.mkDefault true;
     pinentryPackage = lib.mkDefault pkgs.pinentry-curses;
   };
   services.pcscd.enable = lib.mkDefault true;
+
+  ## ----- ssh -----------------------------------------------------------------
+  # A forwarded gpg-agent socket replaces the user's own at login; without
+  # this, sshd refuses to bind over the existing socket file. No effect
+  # while services.openssh is off.
+  services.openssh.settings.StreamLocalBindUnlink = lib.mkDefault true;
 
   ## ----- root ----------------------------------------------------------------
   # Root's password is locked ("!"); admin work goes through sudo. With
