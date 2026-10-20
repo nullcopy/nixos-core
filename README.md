@@ -22,7 +22,7 @@ remote.
 flake.nix            # exports nixosModules.default and templates.machine
 modules/
   default.nix        # entry point — machine flakes import this
-  base.nix           # always-on baseline (nix, gc, net, resolved, base pkgs), all mkDefault
+  base.nix           # always-on baseline (nix, gc, memory guardrails, net, resolved, base pkgs), all mkDefault
   desktop.nix        # core.desktop.enable — full DE: niri+noctalia baseline, greetd, audio
   fde.nix            # mandatory-FDE assertion + core.fde.fido2 YubiKey boot unlock
   tailscale.nix      # core.tailscale.enable — daemon only; manual `sudo tailscale up`

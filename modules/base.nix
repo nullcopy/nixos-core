@@ -20,6 +20,15 @@
     options = lib.mkDefault "--delete-older-than 14d";
   };
 
+  ## ----- memory --------------------------------------------------------------
+  # Guardrails that keep a runaway build from freezing the host.
+
+  # nix-daemon runs builds in its own cgroup, so a hard cap turns a
+  # runaway build into a failed build. OOMPolicy stays "continue" (the
+  # NixOS default) so the daemon survives its builder being killed.
+  # Builds run from a user shell are not in this cgroup.
+  systemd.services.nix-daemon.serviceConfig.MemoryMax = lib.mkDefault "75%";
+
   ## ----- networking ----------------------------------------------------------
   networking.networkmanager.enable = lib.mkDefault true;
   networking.firewall.enable = lib.mkDefault true;
