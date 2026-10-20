@@ -20,6 +20,38 @@
     options = lib.mkDefault "--delete-older-than 14d";
   };
 
+  ## ----- memory --------------------------------------------------------------
+  # Guardrails that keep a runaway build from freezing the host.
+
+  # nix-daemon runs builds in its own cgroup, so a hard cap turns a
+  # runaway build into a failed build. OOMPolicy stays "continue" (the
+  # NixOS default) so the daemon survives its builder being killed.
+  # Builds run from a user shell are not in this cgroup.
+  systemd.services.nix-daemon.serviceConfig.MemoryMax = lib.mkDefault "75%";
+
+  # Compressed swap in RAM. Nothing is written to disk: NixOS's zram
+  # module has no writeback device unless one is set, so swapped pages
+  # never leave memory. Its job is the pressure signal, not capacity:
+  # with swap present, memory pressure builds gradually before the OOM
+  # killer fires, which is what oomd needs to act first. memoryPercent
+  # caps uncompressed content, so RAM actually spent is a third or so
+  # of it. 25% is enough for the signal; more only prolongs thrashing
+  # when pages compress badly.
+  zramSwap.enable = lib.mkDefault true;
+  zramSwap.memoryPercent = lib.mkDefault 25;
+
+  # systemd-oomd kills the worst cgroup under sustained memory pressure
+  # instead of letting the kernel pick one process at a time. The NixOS
+  # module enables the daemon but watches no slices until these are
+  # set. The user slices are what cover builds run from a shell, which
+  # the nix-daemon cgroup does not contain.
+  systemd.oomd = {
+    enable = lib.mkDefault true;
+    enableRootSlice = lib.mkDefault true;
+    enableSystemSlice = lib.mkDefault true;
+    enableUserSlices = lib.mkDefault true;
+  };
+
   ## ----- networking ----------------------------------------------------------
   networking.networkmanager.enable = lib.mkDefault true;
   networking.firewall.enable = lib.mkDefault true;
