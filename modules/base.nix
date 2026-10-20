@@ -40,6 +40,18 @@
   zramSwap.enable = lib.mkDefault true;
   zramSwap.memoryPercent = lib.mkDefault 25;
 
+  # systemd-oomd kills the worst cgroup under sustained memory pressure
+  # instead of letting the kernel pick one process at a time. The NixOS
+  # module enables the daemon but watches no slices until these are
+  # set. The user slices are what cover builds run from a shell, which
+  # the nix-daemon cgroup does not contain.
+  systemd.oomd = {
+    enable = lib.mkDefault true;
+    enableRootSlice = lib.mkDefault true;
+    enableSystemSlice = lib.mkDefault true;
+    enableUserSlices = lib.mkDefault true;
+  };
+
   ## ----- networking ----------------------------------------------------------
   networking.networkmanager.enable = lib.mkDefault true;
   networking.firewall.enable = lib.mkDefault true;
