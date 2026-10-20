@@ -29,6 +29,17 @@
   # Builds run from a user shell are not in this cgroup.
   systemd.services.nix-daemon.serviceConfig.MemoryMax = lib.mkDefault "75%";
 
+  # Compressed swap in RAM. Nothing is written to disk: NixOS's zram
+  # module has no writeback device unless one is set, so swapped pages
+  # never leave memory. Its job is the pressure signal, not capacity:
+  # with swap present, memory pressure builds gradually before the OOM
+  # killer fires, which is what oomd needs to act first. memoryPercent
+  # caps uncompressed content, so RAM actually spent is a third or so
+  # of it. 25% is enough for the signal; more only prolongs thrashing
+  # when pages compress badly.
+  zramSwap.enable = lib.mkDefault true;
+  zramSwap.memoryPercent = lib.mkDefault 25;
+
   ## ----- networking ----------------------------------------------------------
   networking.networkmanager.enable = lib.mkDefault true;
   networking.firewall.enable = lib.mkDefault true;
