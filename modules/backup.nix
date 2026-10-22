@@ -97,6 +97,17 @@ in
         description = "Peers (names in core.backup.peers) allowed to send to this machine.";
       };
 
+      maxAge = lib.mkOption {
+        type = lib.types.int;
+        default = 3 * 24 * 3600;
+        description = ''
+          Seconds. A daily check alerts (core.alerts) when a peer's
+          newest received snapshot is older than this, or when it has
+          sent nothing yet. This catches a dead or misconfigured
+          sender, which the sender's own failure alert cannot.
+        '';
+      };
+
       retention = lib.mkOption {
         type = lib.types.attrsOf lib.types.int;
         default = {
@@ -200,6 +211,38 @@ in
               || zfs create -o mountpoint=none -o canmount=off "$ds"
             zfs allow -u ${lib.escapeShellArg (recvUser peer)} ${permissions} "$ds"
           '') cfg.receive.from}
+        '';
+      };
+
+      core.alerts.onFailure = [
+        "backup-receive-setup"
+        "sanoid"
+      ];
+
+      # A sender that stopped sending produces no failure anywhere; this
+      # notices it from here.
+      systemd.services.backup-stale = {
+        description = "Alert on backup peers whose newest snapshot is too old";
+        startAt = "daily";
+        path = [ config.boot.zfs.package ];
+        serviceConfig.Type = "oneshot";
+        script = ''
+          now=$(date +%s)
+          stale=""
+          ${lib.concatMapStringsSep "\n" (peer: ''
+              newest=$(zfs list -H -p -o creation -t snapshot -r ${lib.escapeShellArg (recvDataset peer)} 2>/dev/null | sort -n | tail -1)
+              if [ -z "$newest" ]; then
+                stale="''${stale}${peer}: nothing received yet
+            "
+              elif [ $((now - newest)) -gt ${toString cfg.receive.maxAge} ]; then
+                stale="''${stale}${peer}: newest snapshot from $(date -d @"$newest" +%F), $(((now - newest) / 86400)) days old
+            "
+              fi
+          '') cfg.receive.from}
+          if [ -n "$stale" ]; then
+            printf '%s' "$stale" | ${config.core.alerts.package}/bin/alert-send "stale backups"
+            exit 1
+          fi
         '';
       };
 

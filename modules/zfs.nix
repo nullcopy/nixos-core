@@ -70,5 +70,36 @@ in
       enable = true;
       interval = cfg.scrubInterval;
     };
+
+    core.alerts.onFailure = [ "zfs-scrub" ];
+
+    # Pool events go to core.alerts.command. ZED runs every all-*.sh
+    # zedlet for every event; this one picks the ones that matter.
+    environment.etc."zfs/zed.d/all-core-alert.sh" = {
+      mode = "0555";
+      text = ''
+        #!${pkgs.runtimeShell}
+        # shellcheck disable=SC1091
+        . "''${ZED_ZEDLET_DIR}/zed-functions.sh"
+        send() { ${config.core.alerts.package}/bin/alert-send "$1"; }
+        zpool=${config.boot.zfs.package}/bin/zpool
+        case "$ZEVENT_SUBCLASS" in
+          statechange)
+            case "$ZEVENT_VDEV_STATE_STR" in
+              DEGRADED|FAULTED|REMOVED|UNAVAIL)
+                $zpool status "$ZEVENT_POOL" | send "pool $ZEVENT_POOL: vdev $ZEVENT_VDEV_PATH $ZEVENT_VDEV_STATE_STR" ;;
+            esac ;;
+          scrub_finish|resilver_finish)
+            if ! $zpool status -x "$ZEVENT_POOL" | ${pkgs.gnugrep}/bin/grep -q "is healthy"; then
+              $zpool status "$ZEVENT_POOL" | send "pool $ZEVENT_POOL: $ZEVENT_SUBCLASS with errors"
+            fi ;;
+          data|deadman)
+            # Data errors arrive in bursts; one alert per pool per hour.
+            zed_rate_limit "$ZEVENT_POOL;$ZEVENT_SUBCLASS;core-alert" 3600 || exit 0
+            $zpool status "$ZEVENT_POOL" | send "pool $ZEVENT_POOL: $ZEVENT_SUBCLASS event" ;;
+        esac
+        exit 0
+      '';
+    };
   };
 }
