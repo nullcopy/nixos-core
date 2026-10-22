@@ -137,6 +137,8 @@ The `core.*` options (source in [modules/](../modules)):
 | `core.tailscale.enable` | tailscale daemon; the admin runs `sudo tailscale up` / `down`, tailnet traffic only ([docs/vpn.md](vpn.md)) |
 | `core.nymvpn.enable` | NymVPN daemon + CLI; no network egress after boot until the admin runs `nym-vpnc connect`, then machine-wide default route ([docs/vpn.md](vpn.md)) |
 | `core.obscura.enable` | Obscura VPN daemon + CLI; no network egress after boot until the admin runs `obscura connect`, then machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
+| `core.zfs.enable` | ZFS: tools, hostname-derived hostId, pool import at boot (`core.zfs.pools`), scrubs ([docs/backup.md](backup.md)) |
+| `core.backup.receive.enable` | Accept raw ZFS replication from the peers in `core.backup.receive.from`; blind storage ([docs/backup.md](backup.md)) |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect
 without conflicts.
