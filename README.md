@@ -30,6 +30,8 @@ modules/
   obscura.nix        # core.obscura.enable — obscura daemon/CLI from its flake; no egress beyond the LAN until a manual `obscura connect`
   zfs.nix            # core.zfs.enable — ZFS tools, hostId from the hostname, pool import, scrubs
   backup.nix         # core.backup.receive — accept raw ZFS replication from peers; blind storage
+  backup-send.nix    # core.backup.send — push raw replication of this machine's datasets to peers (syncoid)
+  alerts.nix         # core.alerts — one command every alert goes through: failed units, stale backups, pool events
 peers.nix            # registry of backup peers (SSH host public keys)
 templates/
   machine/           # scaffold for a new machine repo
@@ -39,7 +41,8 @@ docs/
   vpn.md             # VPN account setup and daily commands
   backup.md          # ZFS-native backups between machines: design, pool layout, procedures
 scripts/
-  nixos-install.sh   # disk partitioning + install for a new machine
+  nixos-install.sh   # disk partitioning (LUKS + ZFS root) + install for a new machine
+  zpool-wizard.sh    # `core-zpool`: create the data pool (disk selection, topology, tank/local)
 ```
 
 ## Options
@@ -66,6 +69,10 @@ a machine enables it.
 - `core.backup.receive.enable` — accept raw ZFS replication from the
   peers in `core.backup.receive.from`, stored encrypted with keys this
   machine never has ([docs/backup.md](docs/backup.md)).
+- `core.backup.send.datasets` — push raw replication of this machine's
+  encrypted datasets to peers on a schedule ([docs/backup.md](docs/backup.md)).
+- `core.alerts.command` — where failed units, stale backups and pool
+  events are reported ([docs/backup.md](docs/backup.md)).
 
 ## New machine setup
 

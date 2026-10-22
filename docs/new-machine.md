@@ -29,8 +29,9 @@ does the disk setup.
 **On the target machine, in the live environment.**
 
 > **Warning:** the install script wipes one whole disk. It creates a GPT
-> layout with a 1 GB EFI partition and a LUKS2-encrypted btrfs root
-> (subvolumes `@`, `@home`, `@nix`, `@log`, `@snapshots`). For a
+> layout with a 1 GB EFI partition and a LUKS2 volume holding the ZFS
+> pool `rpool` (datasets `root`, `nix`, `log`, and `home` with its own
+> ZFS key on top of LUKS; [backup.md](backup.md) says why). For a
 > different layout, partition manually with the
 > [official manual](https://nixos.org/manual/nixos/stable/#sec-installation),
 > then: scaffold the machine repo with
@@ -49,13 +50,18 @@ The install script:
    hostname, the admin user, an existing repo to clone (empty for a
    fresh scaffold), and whether to enable ssh. Confirms with `YES`,
    erases and partitions the disk, and asks for the **disk passphrase**
-   (this unlocks the machine at every boot).
+   (this unlocks the machine at every boot). The ZFS key of `rpool/home`
+   is generated, stored in `/etc/zfs/keys/home` on the encrypted root,
+   and loaded at boot; the script prints it once at the end, and it
+   belongs in a password manager too.
 2. Creates the machine repo at `/mnt/etc/nixos` from the
    nixos-core template with `HOSTNAME` and `ADMINUSER` filled in,
    generates `hardware-configuration.nix`, creates `flake.lock`, and
    commits it all with the pre-commit hook active.
-3. Prints `ok`/`WARNING` checks (hostname, flake attribute, admin user)
-   and opens a shell in the repo to edit `configuration.nix` (next
+3. Prints `ok`/`WARNING` checks (hostname, flake attribute, admin user,
+   `core.zfs.enable`), offers to create a data pool on the other disks
+   with the `core-zpool` wizard (disk selection, topology, `tank/local`
+   with its own key; [backup.md](backup.md)), and opens a shell in the repo to edit `configuration.nix` (next
    section). Edits are committed on exit. Then it asks for a second
    `YES`.
 4. Runs `nixos-install` (the first install takes a while), asks for
@@ -139,6 +145,8 @@ The `core.*` options (source in [modules/](../modules)):
 | `core.obscura.enable` | Obscura VPN daemon + CLI; no network egress after boot until the admin runs `obscura connect`, then machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
 | `core.zfs.enable` | ZFS: tools, hostname-derived hostId, pool import at boot (`core.zfs.pools`), scrubs ([docs/backup.md](backup.md)) |
 | `core.backup.receive.enable` | Accept raw ZFS replication from the peers in `core.backup.receive.from`; blind storage ([docs/backup.md](backup.md)) |
+| `core.backup.send.datasets` | Push raw replication of this machine's encrypted datasets to peers on a schedule ([docs/backup.md](backup.md)) |
+| `core.alerts.command` | Where failed units, stale backups and pool events are reported ([docs/backup.md](backup.md)) |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect
 without conflicts.
@@ -171,7 +179,7 @@ written, you can finish manually — the disk is still mounted at `/mnt`:
 nixos-install --flake "path:/mnt/etc/nixos#<HOSTNAME>" --no-root-password
 nixos-enter --root /mnt -- passwd <ADMINUSER>
 nixos-enter --root /mnt -- chown -R <ADMINUSER>:users /etc/nixos
-umount -R /mnt && cryptsetup close cryptroot
+umount -R /mnt && zpool export -a && cryptsetup close cryptroot
 ```
 
 ## 3. First boot
