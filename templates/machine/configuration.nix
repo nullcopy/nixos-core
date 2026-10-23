@@ -19,6 +19,12 @@
   core.nymvpn.enable = false; # NymVPN: machine-wide tunnel; no egress until the admin runs `nym-vpnc connect`
   core.obscura.enable = false; # Obscura VPN: machine-wide tunnel; no egress until the admin runs `obscura connect`
   core.tailscale.enable = false; # tailscale daemon; the admin runs `sudo tailscale up` manually
+  core.zfs.enable = true; # ZFS tools, pool import and key loading; the install script puts the root on ZFS
+  core.zfs.unlock = [ "rpool/home" ]; # encrypted datasets unlocked at boot from /etc/zfs/keys (docs/backup.md)
+  # core.zfs.pools = [ "tank" ]; # data pool from `core-zpool`, imported at boot
+  core.backup.receive.enable = false; # accept raw ZFS backups from the peers in core.backup.receive.from
+  # core.backup.send.datasets."tank/local".to = [ "obelisk" ]; # push raw backups to peers (docs/backup.md)
+  # core.alerts.command = "..."; # where failed units, stale backups and pool events go (docs/backup.md)
 
   # Optional: FIDO2 token unlock of the root volume at boot. Enroll
   # with systemd-cryptenroll after the install (docs/fde.md in
