@@ -138,6 +138,16 @@ fi
 
 nixos-generate-config --root /mnt --show-hardware-config \
   >"$TARGET/hardware-configuration.nix"
+# Let TRIM through dm-crypt, so the weekly fstrim (base.nix) reaches
+# the SSD. It shows which blocks are free, not what the others hold
+# (docs/fde.md).
+if grep -q 'boot\.initrd\.luks\.devices\."cryptroot"\.device' "$TARGET/hardware-configuration.nix" &&
+  ! grep -q 'allowDiscards' "$TARGET/hardware-configuration.nix"; then
+  sed -i '$i\
+\
+  boot.initrd.luks.devices."cryptroot".allowDiscards = true;' \
+    "$TARGET/hardware-configuration.nix"
+fi
 
 # Lock the flake before the install: nixos-install hashes the repo
 # directory, and a lock file created mid-install changes the hash

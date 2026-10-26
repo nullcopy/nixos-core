@@ -37,6 +37,23 @@ Set `core.fde.fido2.enable = true` in the machine configuration (and
 reboot and test. The configuration block is in
 [new-machine.md](new-machine.md), step 5.
 
+## TRIM
+
+The install script sets `allowDiscards = true` on the root volume in
+`hardware-configuration.nix`, so the weekly `fstrim` from `base.nix`
+reaches the SSD through dm-crypt. The cost: someone holding the disk
+can see which blocks are free, and from that guess the filesystem
+type and how full it is. They cannot read what the used blocks hold.
+A machine installed before this needs the line added by hand, then a
+rebuild and reboot:
+
+```nix
+boot.initrd.luks.devices."cryptroot".allowDiscards = true;
+```
+
+`sudo systemctl start fstrim` then trims once, and
+`sudo journalctl -u fstrim` shows how much it trimmed.
+
 ## Warnings
 
 - `systemd-cryptenroll` wipes the last keyslot on request, and the data
