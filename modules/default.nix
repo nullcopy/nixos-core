@@ -9,5 +9,6 @@
     ./tailscale.nix
     ./nymvpn.nix
     ./obscura.nix
+    ./zfs.nix
   ];
 }
