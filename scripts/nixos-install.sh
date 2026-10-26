@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+command -v zpool >/dev/null || {
+  echo "This live system has no ZFS tools; use the standard NixOS ISO."
+  exit 1
+}
 
 CORE="github:nullcopy/nixos-core" # the flake that provides the machine template
 
@@ -49,6 +53,7 @@ read -r confirm
 # Clean up a previous attempt: /mnt may be mounted and the LUKS mapping
 # open, which makes wipefs fail with "device busy".
 umount -R /mnt 2>/dev/null || true
+zpool export -a 2>/dev/null || true
 cryptsetup close cryptroot 2>/dev/null || true
 
 # Partition suffix: NVMe/eMMC devices use a 'p' separator. SATA/USB do not.
@@ -73,25 +78,47 @@ cryptsetup luksFormat --type luks2 --pbkdf argon2id "$ROOT"
 echo "Unlocking encrypted partition..."
 cryptsetup open "$ROOT" cryptroot
 
-# Format
+# Format. The root pool sits on the LUKS mapper: LUKS gives full-disk
+# encryption (and the FIDO2 unlock, docs/fde.md), ZFS gives the
+# datasets. Legacy mountpoints, so nixos-generate-config emits them as
+# fileSystems and systemd orders the mounts.
 mkfs.fat -F 32 -n BOOT "$BOOT"
-mkfs.btrfs -L nixos /dev/mapper/cryptroot
+zpool create -f -R /mnt \
+  -o ashift=12 -o autotrim=on \
+  -O mountpoint=none -O canmount=off \
+  -O compression=zstd -O atime=off -O xattr=sa -O dnodesize=auto \
+  -O acltype=posixacl -O normalization=formD \
+  rpool /dev/mapper/cryptroot
+# Datasets are grouped by backup policy (docs/zfs.md): rpool/local is
+# rebuilt from the machine repo and never leaves the machine,
+# rpool/encrypted is what snapshots and replication cover. canmount is
+# not inherited, so each container sets it.
+zfs create -o canmount=off rpool/local
+zfs create -o mountpoint=legacy rpool/local/root
+zfs create -o mountpoint=legacy rpool/local/nix
 
-# Subvolumes
-mount /dev/mapper/cryptroot /mnt
-for sv in @ @home @nix @log @snapshots; do
-  btrfs subvolume create /mnt/$sv
-done
-umount /mnt
+# rpool/encrypted is a ZFS encryption root on top of LUKS, with its
+# own passphrase, so a raw backup of it (docs/zfs.md) is ciphertext
+# wherever it lands. Every dataset under it inherits the key, and ZFS
+# refuses an unencrypted one there. The passphrase lives in
+# /etc/zfs/keys/encrypted on the root dataset and is loaded at boot by
+# core.zfs.unlock; the admin records it elsewhere too. It goes in on
+# stdin here because the key file's path is only right on the
+# installed system.
+ZFSKEY=$(head -c 32 /dev/urandom | base64 | tr -d '\n=')
+printf '%s\n' "$ZFSKEY" | zfs create -o canmount=off \
+  -o encryption=aes-256-gcm -o keyformat=passphrase -o keylocation=prompt \
+  rpool/encrypted
+zfs set keylocation=file:///etc/zfs/keys/encrypted rpool/encrypted
+zfs create -o mountpoint=legacy rpool/encrypted/home
 
 # Mount
-OPTS="noatime,compress=zstd:3,space_cache=v2"
-mount -o subvol=@,$OPTS /dev/mapper/cryptroot /mnt
-mkdir -p /mnt/{home,nix,var/log,.snapshots,boot}
-mount -o subvol=@home,$OPTS /dev/mapper/cryptroot /mnt/home
-mount -o subvol=@nix,$OPTS /dev/mapper/cryptroot /mnt/nix
-mount -o subvol=@log,$OPTS /dev/mapper/cryptroot /mnt/var/log
-mount -o subvol=@snapshots,$OPTS /dev/mapper/cryptroot /mnt/.snapshots
+mount -t zfs rpool/local/root /mnt
+mkdir -p /mnt/{home,nix,boot,etc/zfs/keys}
+chmod 700 /mnt/etc/zfs/keys
+mount -t zfs rpool/encrypted/home /mnt/home
+mount -t zfs rpool/local/nix /mnt/nix
+(umask 077 && printf '%s\n' "$ZFSKEY" >/mnt/etc/zfs/keys/encrypted)
 # umask keeps the ESP private (bootctl warns about a world-readable
 # random seed). nixos-generate-config copies the masks into
 # hardware-configuration.nix.
@@ -136,8 +163,33 @@ else
   commit "Scaffold $HOSTNAME from the nixos-core machine template"
 fi
 
+# The hostId the pools are imported under. A cloned repo keeps the one
+# it had, which may predate a rename; otherwise it is derived as
+# core.zfs does, from the hostname's SHA-256. Pinned in
+# hardware-configuration.nix, it survives a later rename.
+HOSTID=$(sed -n 's/^\s*networking\.hostId = "\([0-9a-f]\{8\}\)";.*/\1/p' \
+  "$TARGET/hardware-configuration.nix" 2>/dev/null | head -n 1 || true)
+[[ -n "$HOSTID" ]] || HOSTID=$(printf '%s' "$HOSTNAME" | sha256sum | cut -c 1-8)
+
 nixos-generate-config --root /mnt --show-hardware-config \
   >"$TARGET/hardware-configuration.nix"
+# nixos-generate-config finds the LUKS volume under a btrfs root but
+# not under a ZFS pool; declare it so the initrd unlocks it (and the
+# FDE assertion in nixos-core passes). allowDiscards lets the pool's
+# autotrim and the weekly trim reach the SSD through dm-crypt; it
+# shows which blocks are free, not what is in the others.
+if ! grep -q 'boot\.initrd\.luks\.devices' "$TARGET/hardware-configuration.nix"; then
+  ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
+  sed -i "\$i\\
+\\
+  boot.initrd.luks.devices.\"cryptroot\".device = \"/dev/disk/by-uuid/$ROOT_UUID\";\\
+  boot.initrd.luks.devices.\"cryptroot\".allowDiscards = true;" \
+    "$TARGET/hardware-configuration.nix"
+fi
+sed -i "\$i\\
+\\
+  networking.hostId = \"$HOSTID\";" \
+  "$TARGET/hardware-configuration.nix"
 
 # Lock the flake before the install: nixos-install hashes the repo
 # directory, and a lock file created mid-install changes the hash
@@ -163,6 +215,10 @@ check "$TARGET/flake.nix" "nixosConfigurations\.$HOSTNAME([^A-Za-z0-9_-]|$)" \
   "flake.nix defines nixosConfigurations.$HOSTNAME"
 check "$TARGET/configuration.nix" "users\.users\.$ADMINUSER([^A-Za-z0-9_-]|$)" \
   "users.users.$ADMINUSER is declared in configuration.nix"
+check "$TARGET/configuration.nix" "core\.zfs\.enable *= *true" \
+  "configuration.nix sets core.zfs.enable = true (the root is on ZFS)"
+check "$TARGET/configuration.nix" "^[^#]*\"rpool/encrypted\"" \
+  "core.zfs.unlock lists \"rpool/encrypted\" (otherwise /home does not mount at boot)"
 
 # Review shell: bash on /dev/tty, exit status ignored so a failure here
 # survives set -e. A fresh scaffold has every core.* toggle off, so this
@@ -197,10 +253,20 @@ nixos-enter --root /mnt -- passwd "$ADMINUSER"
 # The repo was written as root; hand it to the now-existing admin.
 nixos-enter --root /mnt -- chown -R "$ADMINUSER:users" /etc/nixos
 
+# Shown before the teardown, which exits the script if /mnt is busy.
+echo
+echo ">>> ZFS key of rpool/encrypted (also in /etc/zfs/keys/encrypted on the new system). Record it"
+echo ">>> in a password manager: a raw backup of /home is readable only with it."
+echo ">>>"
+echo ">>>     $ZFSKEY"
+echo
+
+# An exported pool imports on the installed system without a hostid
+# match (the live system's differs from the installed one's).
 umount -R /mnt
+zpool export -a
 cryptsetup close cryptroot
 
-echo
 echo ">>> NOTE:"
 echo ">>> If you declared more than one user, log in as $ADMINUSER first"
 echo ">>> and set the other passwords with 'passwd <user>'."

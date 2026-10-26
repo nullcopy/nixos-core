@@ -10,6 +10,8 @@ manual.
 - A **working computer** (any OS) to write the USB stick.
 - Network on the target machine during the install; the script fetches
   nixos-core and nixpkgs.
+- A **password manager** open on another device, ready to store the
+  ZFS encryption key the script prints (see the warning in step 2).
 
 Each step names the machine it runs on.
 
@@ -29,14 +31,41 @@ does the disk setup.
 **On the target machine, in the live environment.**
 
 > **Warning:** the install script wipes one whole disk. It creates a GPT
-> layout with a 1 GB EFI partition and a LUKS2-encrypted btrfs root
-> (subvolumes `@`, `@home`, `@nix`, `@log`, `@snapshots`). For a
+> layout with a 1 GB EFI partition and a LUKS2 volume holding the ZFS
+> pool `rpool` (datasets `local/root`, `local/nix`, and `encrypted/home`
+> under a ZFS key on top of LUKS; [zfs.md](zfs.md) says why). For a
 > different layout, partition manually with the
 > [official manual](https://nixos.org/manual/nixos/stable/#sec-installation),
 > then: scaffold the machine repo with
 > `nix flake init -t github:nullcopy/nixos-core#machine`, replace the
 > `MYHOSTNAME` and `MYADMIN` placeholders, generate
 > `hardware-configuration.nix` into it, and run `nixos-install --flake`.
+> The template assumes the script's layout: without an `rpool/encrypted`,
+> remove its `core.zfs.unlock` line, and without ZFS, set
+> `core.zfs.enable = false`.
+
+> [!CAUTION]
+> **BACK UP THE ZFS ENCRYPTION KEY. WITHOUT IT, YOUR BACKUPS OF `/home`
+> ARE PERMANENTLY UNREADABLE.**
+>
+> At the end of the install the script prints the key of
+> `rpool/encrypted`, which encrypts `/home` and everything else under
+> `rpool/encrypted`. **It is printed once.** Put it in a password
+> manager on another device *before* you reboot.
+>
+> - The only other copy is `/etc/zfs/keys/encrypted` on the machine
+>   itself. A dead disk, a lost or stolen laptop, or a reinstall takes
+>   it with it.
+> - Backups of `/home` are meant to be raw ZFS sends
+>   ([zfs.md](zfs.md)): ciphertext that only this key opens. No
+>   passphrase, recovery code or support channel replaces it. Lose the
+>   key and every such backup is noise.
+> - The key is not the disk passphrase. The disk passphrase (or
+>   YubiKey) unlocks the machine at boot; this key is what makes a
+>   backup restorable anywhere else. Keep both.
+>
+> Missed it? On the installed system, `sudo cat /etc/zfs/keys/encrypted`
+> shows it. Store it now, while the machine still works.
 
 ```sh
 curl -O https://raw.githubusercontent.com/nullcopy/nixos-core/main/scripts/nixos-install.sh
@@ -49,13 +78,17 @@ The install script:
    hostname, the admin user, an existing repo to clone (empty for a
    fresh scaffold), and whether to enable ssh. Confirms with `YES`,
    erases and partitions the disk, and asks for the **disk passphrase**
-   (this unlocks the machine at every boot).
+   (this unlocks the machine at every boot). The ZFS key of
+   `rpool/encrypted`, which `/home` inherits, is generated, stored in
+   `/etc/zfs/keys/encrypted` on the encrypted root, and loaded at boot;
+   the script prints it once at the end. **Store it in a password
+   manager before rebooting** (see the warning above).
 2. Creates the machine repo at `/mnt/etc/nixos` from the
    nixos-core template with `HOSTNAME` and `ADMINUSER` filled in,
    generates `hardware-configuration.nix`, creates `flake.lock`, and
    commits it all with the pre-commit hook active.
-3. Prints `ok`/`WARNING` checks (hostname, flake attribute, admin user)
-   and opens a shell in the repo to edit `configuration.nix` (next
+3. Prints `ok`/`WARNING` checks (hostname, flake attribute, admin user,
+   `core.zfs.enable`) and opens a shell in the repo to edit `configuration.nix` (next
    section). Edits are committed on exit. Then it asks for a second
    `YES`.
 4. Runs `nixos-install` (the first install takes a while), asks for
@@ -120,13 +153,15 @@ A complete headless-server example:
 ```
 
 For a desktop or laptop, set `core.desktop.enable = true`. Hardware
-quirks go in the same file; a laptop might add firmware updates and a
-newer kernel:
+quirks go in the same file; a laptop might add firmware updates:
 
 ```nix
   services.fwupd.enable = true;
-  boot.kernelPackages = pkgs.linuxPackages_latest;
 ```
+
+Keep the default kernel: ZFS is built against it, and a newer one
+(`pkgs.linuxPackages_latest`) often is not supported by ZFS yet
+([zfs.md](zfs.md)).
 
 The `core.*` options (source in [modules/](../modules)):
 
@@ -137,6 +172,7 @@ The `core.*` options (source in [modules/](../modules)):
 | `core.tailscale.enable` | tailscale daemon; the admin runs `sudo tailscale up` / `down`, tailnet traffic only ([docs/vpn.md](vpn.md)) |
 | `core.nymvpn.enable` | NymVPN daemon + CLI; no network egress after boot until the admin runs `nym-vpnc connect`, then machine-wide default route ([docs/vpn.md](vpn.md)) |
 | `core.obscura.enable` | Obscura VPN daemon + CLI; no network egress after boot until the admin runs `obscura connect`, then machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
+| `core.zfs.enable` | ZFS: tools, hostname-derived hostId, key loading (`core.zfs.unlock`), pool import at boot (`core.zfs.pools`), scrubs; on in the template since the root is on ZFS ([docs/zfs.md](zfs.md)) |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect
 without conflicts.
@@ -155,6 +191,12 @@ In the live environment, answer the script's repo prompt with that file
 place of the scaffold, regenerates `hardware-configuration.nix`, and
 commits whatever changed.
 
+A data pool from before survives the reinstall, but the key file of any
+encrypted dataset on it was on the wiped root: recreate it from the
+password manager (one line, the passphrase) before the first boot, from
+the review shell, under `/mnt/etc/zfs/keys/` with mode 600
+([zfs.md](zfs.md)).
+
 ### After the script
 
 Remove the USB stick and reboot. Enter the disk passphrase; a login
@@ -169,7 +211,7 @@ written, you can finish manually — the disk is still mounted at `/mnt`:
 nixos-install --flake "path:/mnt/etc/nixos#<HOSTNAME>" --no-root-password
 nixos-enter --root /mnt -- passwd <ADMINUSER>
 nixos-enter --root /mnt -- chown -R <ADMINUSER>:users /etc/nixos
-umount -R /mnt && cryptsetup close cryptroot
+umount -R /mnt && zpool export -a && cryptsetup close cryptroot
 ```
 
 ## 3. First boot
