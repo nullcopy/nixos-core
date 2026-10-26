@@ -28,12 +28,14 @@ modules/
   tailscale.nix      # core.tailscale.enable — daemon only; manual `sudo tailscale up`
   nymvpn.nix         # core.nymvpn.enable — packaged nym-vpnd/vpnc + polkit; no egress beyond the LAN until a manual `nym-vpnc connect`
   obscura.nix        # core.obscura.enable — obscura daemon/CLI from its flake; no egress beyond the LAN until a manual `obscura connect`
+  zfs.nix            # core.zfs.enable — ZFS for data pools on attached drives: hostId, import, key loading, scrubs
 templates/
   machine/           # scaffold for a new machine repo
 docs/
   new-machine.md     # full walkthrough: machine repo -> install -> users
   fde.md             # disk-unlock management: passphrases, YubiKeys, token-only
   vpn.md             # VPN account setup and daily commands
+  zfs.md             # ZFS data pools: core.zfs and core-zpool
 scripts/
   nixos-install.sh   # disk partitioning + install for a new machine
 ```
@@ -56,6 +58,9 @@ a machine enables it.
   `core.nymvpn.enable`.
 - `core.tailscale.enable` — tailscale daemon; the admin runs
   `sudo tailscale up`, tailnet traffic only ([docs/vpn.md](docs/vpn.md)).
+- `core.zfs.enable` — ZFS for data pools on attached drives: a
+  hostname-derived hostId, import at boot (`core.zfs.pools`), key
+  loading (`core.zfs.unlock`), scrubs ([docs/zfs.md](docs/zfs.md)).
 
 ## New machine setup
 
