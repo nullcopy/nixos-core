@@ -38,6 +38,7 @@ docs/
   zfs.md             # ZFS data pools: core.zfs and core-zpool
 scripts/
   nixos-install.sh   # disk partitioning + install for a new machine
+  zpool-wizard.sh    # `core-zpool`: create a data pool on attached drives (disk selection, topology, tank/encrypted)
 ```
 
 ## Options

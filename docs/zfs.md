@@ -1,8 +1,9 @@
-# ZFS data pools: `core.zfs`
+# ZFS data pools: `core.zfs` and `core-zpool`
 
 The root stays on btrfs. ZFS is for pools on other attached drives.
 `core.zfs` ([modules/zfs.nix](../modules/zfs.nix)) is the support
-every such machine needs.
+every such machine needs; `core-zpool` creates the pool after the
+install.
 
 ## `core.zfs`
 
@@ -37,8 +38,50 @@ core.zfs.scrubInterval = "monthly";
   the build fails loudly if a machine picks a kernel ZFS does not
   support yet, so `boot.kernelPackages = pkgs.linuxPackages_latest`
   may have to wait for ZFS.
-- **TRIM**: `zpool-trim` runs weekly; `zpool trim` skips devices
-  without TRIM, so spinning disks are fine.
+- **TRIM**: pools made by `core-zpool` have `autotrim=on` and
+  `zpool-trim` runs weekly; `zpool trim` skips devices without TRIM,
+  so spinning disks are fine.
+
+## Creating a pool
+
+Set `core.zfs.enable = true;` in `configuration.nix` and rebuild;
+`core-zpool` is then on the machine. Run it as root:
+
+```sh
+sudo core-zpool
+nixos-rebuild switch --sudo
+```
+
+It lists the disks and marks the ones in use, which cannot be chosen:
+a disk counts as in use if it or a partition on it is mounted or
+active swap, a member of an imported pool, held by another block
+device (an open LUKS container, an active LVM volume, an assembled md
+array), or part of a mounted multi-device btrfs. Leftover signatures
+of things that are not active do not count; those are what it wipes.
+
+It takes the selection (each disk once) and the topology (single,
+mirror, raidz1, raidz2), asks for `YES`, wipes the disks, and creates
+`tank` with `ashift=12`, `autotrim=on`, `compression=zstd`,
+`atime=off`, `xattr=sa`, `acltype=posixacl`, `mountpoint=none` and
+`canmount=off`, and `tank/encrypted` mounted at `/tank` under a fresh
+passphrase. The key file is written before the dataset is created,
+and if anything fails after the passphrase is made, it is printed.
+
+It then adds `core.zfs.pools` and `core.zfs.unlock` to
+`/etc/nixos/configuration.nix`, after the `core.zfs.enable = true;`
+line, appending to lists that exist, and checks the result. If the
+file has no such line, or a list spans several lines, it prints the
+lines to add instead. `--config FILE` names another file,
+`--no-config` only prints.
+
+**Record the passphrase in a password manager.** It is also in
+`/etc/zfs/keys/tank-encrypted`, but that file goes with the root; a
+backup of `tank/encrypted` is readable only with it.
+
+`tank/encrypted` is the encryption root: a dataset created under it
+inherits the key, and ZFS refuses an unencrypted one there. Group
+data as datasets under it (`tank/encrypted/media`, say).
+`--no-encrypted` skips it.
 
 ## Reinstalling
 

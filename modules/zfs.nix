@@ -8,9 +8,24 @@
 # ZFS support for data pools on attached drives: kernel module and
 # tools, pool import at boot, key loading, scrubs. The root stays on
 # btrfs; nothing here touches the install layout. docs/zfs.md has how
-# pools and keys are handled.
+# pools and keys are handled, and `core-zpool` creates a pool.
 let
   cfg = config.core.zfs;
+
+  zpoolWizard = pkgs.writeShellApplication {
+    name = "core-zpool";
+    runtimeInputs = [
+      config.boot.zfs.package
+      pkgs.gptfdisk
+      pkgs.util-linux
+      pkgs.coreutils
+      pkgs.gnugrep
+      pkgs.gnused
+      pkgs.gawk
+      pkgs.systemd
+    ];
+    text = builtins.readFile ../scripts/zpool-wizard.sh;
+  };
 in
 {
   options.core.zfs = {
@@ -73,5 +88,7 @@ in
       enable = true;
       interval = cfg.scrubInterval;
     };
+
+    environment.systemPackages = [ zpoolWizard ];
   };
 }
