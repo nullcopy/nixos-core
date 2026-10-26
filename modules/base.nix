@@ -52,6 +52,22 @@
     enableUserSlices = lib.mkDefault true;
   };
 
+  ## ----- disks -------------------------------------------------------------
+  # Monthly scrub of every btrfs filesystem (nixpkgs scrubs each one
+  # once, however many subvolumes are mounted from it). On the install
+  # script's single-disk layout, metadata is DUP, so a scrub repairs
+  # bad metadata from the second copy and detects, without repairing,
+  # bad file data. Results: `sudo btrfs scrub status /` and the journal
+  # of btrfs-scrub-*.service. Nothing notifies on errors.
+  services.btrfs.autoScrub.enable = lib.mkDefault (
+    lib.any (fs: fs.fsType == "btrfs") (lib.attrValues config.fileSystems)
+  );
+
+  # Weekly TRIM of the mounted filesystems that support it. Through LUKS
+  # it reaches the SSD only if the volume has allowDiscards (the install
+  # script sets it; docs/fde.md); otherwise it is skipped quietly.
+  services.fstrim.enable = lib.mkDefault true;
+
   ## ----- networking ----------------------------------------------------------
   networking.networkmanager.enable = lib.mkDefault true;
   networking.firewall.enable = lib.mkDefault true;
