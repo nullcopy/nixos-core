@@ -67,6 +67,17 @@ in
         '';
       };
 
+      maxAge = lib.mkOption {
+        type = lib.types.int;
+        default = 3 * 24 * 3600;
+        description = ''
+          Seconds. A daily check alerts (core.alerts) when an accepted
+          sender's newest received snapshot is older than this, or when
+          it has sent nothing yet. This catches a dead or misconfigured
+          sender, which the sender's own failure alert cannot.
+        '';
+      };
+
       retention = lib.mkOption {
         type = lib.types.attrsOf lib.types.int;
         default = {
@@ -130,6 +141,46 @@ in
         RemainAfterExit = true;
         ExecStart = "${coreBackup}/bin/core-backup setup";
       };
+    };
+
+    core.alerts.onFailure = [
+      "backup-receive-setup"
+      "sanoid"
+    ];
+
+    # A sender that stopped sending produces no failure anywhere; this
+    # notices it from here.
+    systemd.services.backup-stale = {
+      description = "Alert on accepted backup senders whose newest snapshot is too old";
+      startAt = "daily";
+      # Datasets must exist when the check runs; without this a manual
+      # start before the pool is imported reports every peer stale.
+      after = [ "zfs-import.target" ];
+      path = [
+        config.boot.zfs.package
+        pkgs.coreutils
+      ];
+      serviceConfig.Type = "oneshot";
+      script = ''
+        now=$(date +%s)
+        stale=""
+        for d in /var/lib/backup/recv/*/; do
+          [ -f "$d/key" ] || continue
+          name=$(basename "$d")
+          newest=$(zfs list -H -p -o creation -t snapshot -r ${lib.escapeShellArg cfg.receive.dataset}/"$name" 2>/dev/null | sort -n | tail -1)
+          if [ -z "$newest" ]; then
+            stale="$stale$name: nothing received yet
+        "
+          elif [ $((now - newest)) -gt ${toString cfg.receive.maxAge} ]; then
+            stale="$stale$name: newest snapshot from $(date -d @"$newest" +%F), $(((now - newest) / 86400)) days old
+        "
+          fi
+        done
+        if [ -n "$stale" ]; then
+          printf '%s' "$stale" | ${config.core.alerts.package}/bin/alert-send "stale backups"
+          exit 1
+        fi
+      '';
     };
 
     # Prune what senders sent, by this machine's policy. sanoid's own

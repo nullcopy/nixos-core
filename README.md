@@ -30,6 +30,7 @@ modules/
   obscura.nix        # core.obscura.enable — obscura daemon/CLI from its flake; no egress beyond the LAN until a manual `obscura connect`
   zfs.nix            # core.zfs.enable — ZFS for data pools on attached drives: hostId, import, key loading, scrubs
   backup.nix         # core.backup.receive — accept raw ZFS replication from paired senders; the core-backup command
+  alerts.nix         # core.alerts — one command every alert goes through: failed units, stale backups, pool events
 templates/
   machine/           # scaffold for a new machine repo
 docs/
@@ -68,6 +69,8 @@ a machine enables it.
 - `core.backup.receive.enable` — accept raw ZFS replication from
   senders paired with `core-backup invite`, stored encrypted with keys
   this machine never has ([docs/backup.md](docs/backup.md)).
+- `core.alerts.command` — where failed units, stale backups and pool
+  events are reported ([docs/backup.md](docs/backup.md)).
 
 ## New machine setup
 
