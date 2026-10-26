@@ -139,6 +139,7 @@ The `core.*` options (source in [modules/](../modules)):
 | `core.obscura.enable` | Obscura VPN daemon + CLI; no network egress after boot until the admin runs `obscura connect`, then machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
 | `core.zfs.enable` | ZFS for data pools on attached drives: hostname-derived hostId, import at boot (`core.zfs.pools`), key loading (`core.zfs.unlock`), scrubs ([docs/zfs.md](zfs.md)) |
 | `core.backup.receive.enable` | Accept raw ZFS replication from senders paired with `core-backup invite`; blind storage ([docs/backup.md](backup.md)) |
+| `core.backup.send.datasets` | Push raw replication of this machine's encrypted datasets to peers on a schedule ([docs/backup.md](backup.md)) |
 | `core.alerts.command` | Where failed units, stale backups and pool events are reported ([docs/backup.md](backup.md)) |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect

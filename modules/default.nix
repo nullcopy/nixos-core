@@ -11,6 +11,7 @@
     ./obscura.nix
     ./zfs.nix
     ./backup.nix
+    ./backup-send.nix
     ./alerts.nix
   ];
 }
