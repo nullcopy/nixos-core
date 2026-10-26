@@ -29,6 +29,7 @@ modules/
   nymvpn.nix         # core.nymvpn.enable — packaged nym-vpnd/vpnc + polkit; no egress beyond the LAN until a manual `nym-vpnc connect`
   obscura.nix        # core.obscura.enable — obscura daemon/CLI from its flake; no egress beyond the LAN until a manual `obscura connect`
   zfs.nix            # core.zfs.enable — ZFS for data pools on attached drives: hostId, import, key loading, scrubs
+  backup.nix         # core.backup.receive — accept raw ZFS replication from paired senders; the core-backup command
 templates/
   machine/           # scaffold for a new machine repo
 docs/
@@ -36,9 +37,11 @@ docs/
   fde.md             # disk-unlock management: passphrases, YubiKeys, token-only
   vpn.md             # VPN account setup and daily commands
   zfs.md             # ZFS data pools: core.zfs and core-zpool
+  backup.md          # ZFS-native backups between machines: design, pool layout, procedures
 scripts/
   nixos-install.sh   # disk partitioning + install for a new machine
   zpool-wizard.sh    # `core-zpool`: create a data pool on attached drives (disk selection, topology, tank/encrypted)
+  core-backup.sh     # `core-backup`: pair backup senders with a receiver (magic-wormhole), list, revoke
 ```
 
 ## Options
@@ -62,6 +65,9 @@ a machine enables it.
 - `core.zfs.enable` — ZFS for data pools on attached drives: a
   hostname-derived hostId, import at boot (`core.zfs.pools`), key
   loading (`core.zfs.unlock`), scrubs ([docs/zfs.md](docs/zfs.md)).
+- `core.backup.receive.enable` — accept raw ZFS replication from
+  senders paired with `core-backup invite`, stored encrypted with keys
+  this machine never has ([docs/backup.md](docs/backup.md)).
 
 ## New machine setup
 

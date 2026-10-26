@@ -10,5 +10,6 @@
     ./nymvpn.nix
     ./obscura.nix
     ./zfs.nix
+    ./backup.nix
   ];
 }

@@ -20,6 +20,7 @@
   core.obscura.enable = false; # Obscura VPN: machine-wide tunnel; no egress until the admin runs `obscura connect`
   core.tailscale.enable = false; # tailscale daemon; the admin runs `sudo tailscale up` manually
   core.zfs.enable = false; # ZFS for data pools on attached drives; `core-zpool` creates one (docs/zfs.md)
+  core.backup.receive.enable = false; # accept raw ZFS backups from senders paired with `core-backup invite` (docs/backup.md)
 
   # Optional: FIDO2 token unlock of the root volume at boot. Enroll
   # with systemd-cryptenroll after the install (docs/fde.md in
