@@ -71,8 +71,8 @@ in
     }
 
     (lib.mkIf cfg.fido2.enable {
-      # FIDO2 unlock requires the systemd initrd.
-      boot.initrd.systemd.enable = true;
+      # FIDO2 unlock needs the systemd initrd, which nixpkgs now always
+      # uses: it removed the scripted initrd and boot.initrd.systemd.enable.
       boot.initrd.luks.devices.${cfg.name}.crypttabExtraOpts = [ "fido2-device=auto" ];
     })
   ];
