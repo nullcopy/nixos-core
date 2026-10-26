@@ -12,6 +12,7 @@ core.zfs.enable = true;
 core.zfs.pools = [ "tank" ];              # imported at boot
 core.zfs.unlock = [ "tank/encrypted" ];   # encryption roots whose keys load at import
 core.zfs.scrubInterval = "monthly";
+core.zfs.arcMaxPercent = 25;              # ARC cap, % of RAM; null for ZFS's default
 ```
 
 - **hostId** defaults to the first eight hex digits of the hostname's
@@ -20,7 +21,19 @@ core.zfs.scrubInterval = "monthly";
   with no `-f` and nothing to remember. A renamed machine imports its
   pools once by hand with `zpool import -f <pool>`, or pins the old
   value as `networking.hostId`; the import service fails until then,
-  the boot does not.
+  the boot does not. The value is only as unique as the hostname, so
+  evaluation fails on an empty hostname, `nixos` or the template's
+  `MYHOSTNAME` unless `networking.hostId` is set.
+- **`core.zfs.unlock`** entries must name pools in `core.zfs.pools`;
+  evaluation fails otherwise, since nixpkgs loads keys only while
+  importing the pools it imports.
+- **ARC**: ZFS's read cache is not page cache and shrinks slowly under
+  memory pressure, so `zfs-arc-max.service` caps it at
+  `core.zfs.arcMaxPercent` of RAM (25 by default) at boot, alongside
+  the memory guardrails in base.nix.
+- **Overrides**: scrubs (`services.zfs.autoScrub.enable`) and
+  `boot.zfs.requestEncryptionCredentials` are defaults a machine can
+  set without `mkForce`.
 - **Key loading** is nixpkgs' own: `core.zfs.unlock` is passed as
   `boot.zfs.requestEncryptionCredentials`, so `zfs-import-<pool>`
   loads the key of each listed encryption root right after importing
@@ -67,11 +80,18 @@ mirror, raidz1, raidz2), asks for `YES`, wipes the disks, and creates
 passphrase. The key file is written before the dataset is created,
 and if anything fails after the passphrase is made, it is printed.
 
+Before anything is wiped it refuses a name `zpool create` would reject
+(`log`, names starting `mirror`, `raidz`, `draid`, `spare` or `c` and
+a digit), a pool of the same name that is imported or importable from
+any attached disk (two of one name make the boot-time import fail),
+and an existing key file for the dataset.
+
 It then adds `core.zfs.pools` and `core.zfs.unlock` to
 `/etc/nixos/configuration.nix`, after the `core.zfs.enable = true;`
-line, appending to lists that exist, and checks the result. If the
-file has no such line, or a list spans several lines, it prints the
-lines to add instead. `--config FILE` names another file,
+line and any `core.zfs` lines right below it, appending to lists that
+exist (comments after a list are left alone), and checks the result.
+If the file has no such line or more than one, or a list spans several
+lines, it prints the lines to add instead. `--config FILE` names another file,
 `--no-config` only prints.
 
 **Record the passphrase in a password manager.** It is also in

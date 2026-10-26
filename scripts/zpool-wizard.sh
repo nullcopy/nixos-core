@@ -42,19 +42,33 @@ die() {
 
 [[ $EUID -eq 0 ]] || die "run as root"
 [[ $POOL =~ ^[a-zA-Z][a-zA-Z0-9_.-]*$ ]] || die "bad pool name: $POOL"
+# Names zpool create rejects, checked here so nothing is wiped first.
+if [[ $POOL =~ ^(mirror|raidz|draid|spare) || $POOL == log || $POOL =~ ^c[0-9] ]]; then
+  die "reserved pool name: $POOL"
+fi
 zpool list -H -o name 2>/dev/null | grep -qxF "$POOL" && die "pool $POOL is already imported"
+# A second pool of the same name on another disk makes `zpool import
+# <name>` at boot ambiguous, and neither pool is imported.
+if zpool import 2>/dev/null | awk '$1 == "pool:" { print $2 }' | grep -qxF "$POOL"; then
+  die "a pool named $POOL is on an attached disk (see zpool import); pick another --pool, or zpool labelclear its disks"
+fi
+KEYFILE=/etc/zfs/keys/$POOL-encrypted
+if [[ $ENCRYPTED -eq 1 && -e $KEYFILE ]]; then
+  die "$KEYFILE exists (the key of an earlier $POOL?); move it away or pick another --pool"
+fi
 
 # Whether configuration.nix can be edited is settled before anything is
-# wiped: the file must exist and enable core.zfs on a line of its own
-# (the lines are added after it). Otherwise the lines are printed.
+# wiped: the file must exist and enable core.zfs on exactly one line of
+# its own (the lines are added after it). Otherwise the lines are
+# printed.
 EDIT=0
 if [[ -n $CONFIG ]]; then
   [[ -f $CONFIG ]] || die "$CONFIG does not exist (--config FILE, or --no-config)"
-  if grep -q '^\s*core\.zfs\.enable = true;' "$CONFIG"; then
-    EDIT=1
-  else
-    echo "core-zpool: $CONFIG has no 'core.zfs.enable = true;' line; the lines to add are printed at the end" >&2
-  fi
+  case $(grep -c '^\s*core\.zfs\.enable = true;' "$CONFIG") in
+    1) EDIT=1 ;;
+    0) echo "core-zpool: $CONFIG has no 'core.zfs.enable = true;' line; the lines to add are printed at the end" >&2 ;;
+    *) echo "core-zpool: $CONFIG has more than one 'core.zfs.enable = true;' line; the lines to add are printed at the end" >&2 ;;
+  esac
 fi
 
 # A stable name for zpool create: the first by-id link that is not a
@@ -149,7 +163,6 @@ declare -a VDEVS=()
 for d in "${CHOSEN[@]}"; do VDEVS+=("$(by_id "$d")"); done
 if [[ $TOPOLOGY == single ]]; then SPEC=("${VDEVS[@]}"); else SPEC=("$TOPOLOGY" "${VDEVS[@]}"); fi
 
-KEYFILE=/etc/zfs/keys/$POOL-encrypted
 echo
 echo "Plan:"
 echo "  zpool create $POOL ${SPEC[*]}"
@@ -211,20 +224,60 @@ fi
 LINES=("core.zfs.pools = [ \"$POOL\" ];")
 [[ $ENCRYPTED -eq 1 ]] && LINES+=("core.zfs.unlock = [ \"$POOL/encrypted\" ];")
 
+# Only the list itself (between `[` and `]` on the option's line) is
+# read or changed, never a trailing comment.
+list_re() { # OPTION
+  printf '^([[:space:]]*%s = \\[)([^]]*)\\](.*)$' "${1//./\\.}"
+}
+
+# OPTION: the contents of each single-line list for OPTION.
+list_items() {
+  local re line
+  re=$(list_re "$1")
+  while IFS= read -r line; do
+    [[ $line =~ $re ]] && printf '%s\n' "${BASH_REMATCH[2]}"
+  done <"$CONFIG"
+  return 0
+}
+
+list_has() { # OPTION VALUE
+  list_items "$1" | grep -qF "\"$2\""
+}
+
 # OPTION VALUE: append VALUE to OPTION's single-line list, or add the
-# option after the enable line. Commented-out placeholders for the
-# option are removed. Every sed is scoped to the option's own line.
+# option at the end of the core.zfs lines that follow the (one) enable
+# line. A commented-out placeholder for the option is removed.
 add_to_list() {
-  local key=$1 value=$2 pat
-  pat="^\s*${key//./\\.} = \["
+  local key=$1 value=$2 re i e n indent
+  local -a lines items
   sed -i "/^\s*# ${key//./\\.} = /d" "$CONFIG"
-  if grep -q "$pat" "$CONFIG"; then
-    grep "$pat" "$CONFIG" | grep -qF "\"$value\"" && return 0
-    grep -q "$pat.*\];" "$CONFIG" || return 1
-    sed -i "/${pat}/{ s#\];# \"$value\" ];#; s#\[ *\"#[ \"#; s#  *\"#\ \"#g; }" "$CONFIG"
+  list_has "$key" "$value" && return 0
+  mapfile -t lines <"$CONFIG"
+  if grep -q "^\s*${key//./\\.} = \[" "$CONFIG"; then
+    # A list spanning several lines, or set twice, is left alone.
+    [[ $(list_items "$key" | wc -l) -eq 1 ]] || return 1
+    re=$(list_re "$key")
+    for i in "${!lines[@]}"; do
+      if [[ ${lines[$i]} =~ $re ]]; then
+        read -r -a items <<<"${BASH_REMATCH[2]}"
+        items+=("\"$value\"")
+        lines[i]="${BASH_REMATCH[1]} ${items[*]} ]${BASH_REMATCH[3]}"
+      fi
+    done
   else
-    sed -i "s#^\(\s*\)core\.zfs\.enable = true;\(.*\)#\1core.zfs.enable = true;\2\n\1$key = [ \"$value\" ];#" "$CONFIG"
+    re='^([[:space:]]*)core\.zfs\.enable = true;'
+    for i in "${!lines[@]}"; do
+      [[ ${lines[$i]} =~ $re ]] && { e=$i; indent=${BASH_REMATCH[1]}; }
+    done
+    [[ -n ${e:-} ]] || return 1
+    # Past the complete one-line core.zfs settings right after it, so
+    # options land in the order they are added.
+    re='^[[:space:]]*core\.zfs\.[A-Za-z]+ = [^#]*;[[:space:]]*(#.*)?$'
+    n=$e
+    while [[ ${lines[n + 1]:-} =~ $re ]]; do n=$((n + 1)); done
+    lines=("${lines[@]:0:n+1}" "$indent$key = [ \"$value\" ];" "${lines[@]:n+1}")
   fi
+  printf '%s\n' "${lines[@]}" >"$CONFIG"
 }
 
 ok=0
@@ -233,9 +286,9 @@ if [[ $EDIT -eq 1 ]]; then
   add_to_list core.zfs.pools "$POOL" || ok=0
   [[ $ENCRYPTED -eq 1 ]] && { add_to_list core.zfs.unlock "$POOL/encrypted" || ok=0; }
   # Check the result rather than trust the edit.
-  grep "^\s*core\.zfs\.pools = \[" "$CONFIG" | grep -qF "\"$POOL\"" || ok=0
+  list_has core.zfs.pools "$POOL" || ok=0
   if [[ $ENCRYPTED -eq 1 ]]; then
-    grep "^\s*core\.zfs\.unlock = \[" "$CONFIG" | grep -qF "\"$POOL/encrypted\"" || ok=0
+    list_has core.zfs.unlock "$POOL/encrypted" || ok=0
   fi
 fi
 if [[ $ok -eq 1 ]]; then
