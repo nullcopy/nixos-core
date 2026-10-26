@@ -86,3 +86,7 @@ nix flake update                             # bump everything, then rebuild
 `nix develop` (or direnv with `use flake` in `.envrc`) gives a shell with
 nil, nixfmt, prettier and shellcheck. The pre-commit hook in `.githooks`
 formats staged `.nix` files with that nixfmt.
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0 or later](LICENSE) (`GPL-3.0-or-later`).
