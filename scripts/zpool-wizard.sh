@@ -92,12 +92,13 @@ by_id() { # /dev/sdX
 POOL_DEVICES=$(zpool status -LP 2>/dev/null | awk '$1 ~ /^\/dev\// { print $1 }' || true)
 MOUNTED_UUIDS=$(lsblk -nro UUID,MOUNTPOINT | awk 'NF == 2 { print $1 }' || true)
 in_use() { # /dev/sdX
-  local p name uuid
+  local p name uuid holders
   for p in $(lsblk -nro PATH "$1"); do
     [[ -n $(lsblk -dnro MOUNTPOINT "$p") ]] && return 0
     grep -qxF "$(readlink -f "$p")" <<<"$POOL_DEVICES" && return 0
     name=$(basename "$(readlink -f "$p")")
-    compgen -G "/sys/class/block/$name/holders/*" >/dev/null && return 0
+    holders=("/sys/class/block/$name/holders/"*)
+    [[ -e ${holders[0]} ]] && return 0
     if [[ $(lsblk -dnro FSTYPE "$p") == btrfs ]]; then
       uuid=$(lsblk -dnro UUID "$p")
       [[ -n $uuid ]] && grep -qxF "$uuid" <<<"$MOUNTED_UUIDS" && return 0
@@ -113,7 +114,7 @@ echo "Disks:"
 declare -A USABLE=()
 for i in "${!DISKS[@]}"; do
   d=${DISKS[$i]}
-  info=$(lsblk -dnro SIZE,MODEL,SERIAL "$d" | tr -s ' ')
+  info=$(lsblk -dno SIZE,MODEL,SERIAL "$d" | awk '{ $1 = $1; print }')
   if in_use "$d"; then
     printf '  %2d) %-14s %s   (in use)\n' "$((i + 1))" "$d" "$info"
   else
