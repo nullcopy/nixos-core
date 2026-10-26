@@ -86,6 +86,7 @@ A complete headless-server example:
   core.nymvpn.enable = true;        # NymVPN: machine-wide tunnel, manual `nym-vpnc connect` — see docs/vpn.md
   core.obscura.enable = false;      # Obscura VPN instead of NymVPN: one of the two — see docs/vpn.md
   core.tailscale.enable = true;     # tailscale daemon, manual `sudo tailscale up` — see docs/vpn.md
+  core.updates.fetch.enable = true; # daily background fetch of the next generation — see docs/updates.md
   # core.fde.fido2.enable = true;   # YubiKey disk unlock — see step 4
 
   ## Boot
@@ -137,6 +138,7 @@ The `core.*` options (source in [modules/](../modules)):
 | `core.tailscale.enable` | tailscale daemon; the admin runs `sudo tailscale up` / `down`, tailnet traffic only ([docs/vpn.md](vpn.md)) |
 | `core.nymvpn.enable` | NymVPN daemon + CLI; no network egress after boot until the admin runs `nym-vpnc connect`, then machine-wide default route ([docs/vpn.md](vpn.md)) |
 | `core.obscura.enable` | Obscura VPN daemon + CLI; no network egress after boot until the admin runs `obscura connect`, then machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
+| `core.updates.fetch.enable` | Daily timer that builds the system generation of the newest inputs without switching, so an update downloads little; runs as the admin ([docs/updates.md](updates.md)) |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect
 without conflicts.

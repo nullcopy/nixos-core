@@ -19,6 +19,7 @@
   core.nymvpn.enable = false; # NymVPN: machine-wide tunnel; no egress until the admin runs `nym-vpnc connect`
   core.obscura.enable = false; # Obscura VPN: machine-wide tunnel; no egress until the admin runs `obscura connect`
   core.tailscale.enable = false; # tailscale daemon; the admin runs `sudo tailscale up` manually
+  core.updates.fetch.enable = false; # daily background fetch of the next system generation, so updates download little (docs/updates.md)
 
   # Optional: FIDO2 token unlock of the root volume at boot. Enroll
   # with systemd-cryptenroll after the install (docs/fde.md in

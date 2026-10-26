@@ -28,12 +28,14 @@ modules/
   tailscale.nix      # core.tailscale.enable — daemon only; manual `sudo tailscale up`
   nymvpn.nix         # core.nymvpn.enable — packaged nym-vpnd/vpnc + polkit; no egress beyond the LAN until a manual `nym-vpnc connect`
   obscura.nix        # core.obscura.enable — obscura daemon/CLI from its flake; no egress beyond the LAN until a manual `obscura connect`
+  updates.nix        # core.updates.fetch.enable — daily background fetch of the next system generation
 templates/
   machine/           # scaffold for a new machine repo
 docs/
   new-machine.md     # full walkthrough: machine repo -> install -> users
   fde.md             # disk-unlock management: passphrases, YubiKeys, token-only
   vpn.md             # VPN account setup and daily commands
+  updates.md         # updating a machine; the background fetch and how to turn it on
 scripts/
   nixos-install.sh   # disk partitioning + install for a new machine
 ```
@@ -56,6 +58,9 @@ a machine enables it.
   `core.nymvpn.enable`.
 - `core.tailscale.enable` — tailscale daemon; the admin runs
   `sudo tailscale up`, tailnet traffic only ([docs/vpn.md](docs/vpn.md)).
+- `core.updates.fetch.enable` — a daily timer builds the system
+  generation of the newest inputs without switching, so an update
+  downloads little ([docs/updates.md](docs/updates.md)).
 
 ## New machine setup
 
@@ -80,6 +85,10 @@ nixos-rebuild switch --sudo                  # apply config edits
 nix flake update core                        # pull nixos-core updates, then rebuild
 nix flake update                             # bump everything, then rebuild
 ```
+
+With `core.updates.fetch.enable`, the `nixos-fetch` timer has usually
+downloaded most of an update already; see
+[docs/updates.md](docs/updates.md).
 
 ## Working on this repo
 
