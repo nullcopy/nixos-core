@@ -80,3 +80,9 @@ nixos-rebuild switch --sudo                  # apply config edits
 nix flake update core                        # pull nixos-core updates, then rebuild
 nix flake update                             # bump everything, then rebuild
 ```
+
+## Working on this repo
+
+`nix develop` (or direnv with `use flake` in `.envrc`) gives a shell with
+nil, nixfmt, prettier and shellcheck. The pre-commit hook in `.githooks`
+formats staged `.nix` files with that nixfmt.

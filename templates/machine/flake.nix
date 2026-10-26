@@ -28,5 +28,10 @@
           ./configuration.nix
         ];
       };
+
+      # The tools for editing this repo (nixfmt for the pre-commit hook,
+      # a Nix language server) come from core, and move with
+      # `nix flake update core`. `nix develop`, or `use flake` in .envrc.
+      devShells = core.devShells;
     };
 }

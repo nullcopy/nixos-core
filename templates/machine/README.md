@@ -15,7 +15,8 @@ has no remote.
   config
 - `hardware-configuration.nix` — generated at install
 - `flake.nix` — consumes nixos-core as `core`; `flake.lock` pins it
-  (`nix flake update core`)
+  (`nix flake update core`). Its dev shell (`nix develop`, or direnv's
+  `use flake`) is core's: nil, nixfmt, prettier, shellcheck.
 
 In a clone made some other way, run
 `git config core.hooksPath .githooks` once.

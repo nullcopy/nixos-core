@@ -60,6 +60,18 @@
         description = "Per-machine NixOS flake consuming nixos-core";
       };
 
+      # Tools for working on this repository: the nixfmt the pre-commit
+      # hook runs, a Nix language server, and shellcheck for ./scripts.
+      # A plain `use flake` in .envrc loads it.
+      devShells.${system}.default = pkgs.mkShell {
+        packages = with pkgs; [
+          nil
+          nixfmt
+          prettier
+          shellcheck
+        ];
+      };
+
       formatter.${system} = pkgs.nixfmt;
     };
 }
