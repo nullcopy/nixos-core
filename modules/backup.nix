@@ -148,10 +148,11 @@ in
       "sanoid"
     ];
 
-    # A sender that stopped sending produces no failure anywhere; this
-    # notices it from here.
+    # A sender that stopped sending produces no failure anywhere, and a
+    # sender outside nixos-core has no kernel-enforced raw-only send:
+    # this notices both from here.
     systemd.services.backup-stale = {
-      description = "Alert on accepted backup senders whose newest snapshot is too old";
+      description = "Alert on accepted backup senders: stale snapshots, or received data that is not blind";
       startAt = "daily";
       # Datasets must exist when the check runs; without this a manual
       # start before the pool is imported reports every peer stale.
@@ -164,10 +165,12 @@ in
       script = ''
         now=$(date +%s)
         stale=""
+        blind=""
         for d in /var/lib/backup/recv/*/; do
           [ -f "$d/key" ] || continue
           name=$(basename "$d")
-          newest=$(zfs list -H -p -o creation -t snapshot -r ${lib.escapeShellArg cfg.receive.dataset}/"$name" 2>/dev/null | sort -n | tail -1)
+          ds=${lib.escapeShellArg cfg.receive.dataset}/"$name"
+          newest=$(zfs list -H -p -o creation -t snapshot -r "$ds" 2>/dev/null | sort -n | tail -1)
           if [ -z "$newest" ]; then
             stale="$stale$name: nothing received yet
         "
@@ -175,9 +178,28 @@ in
             stale="$stale$name: newest snapshot from $(date -d @"$newest" +%F), $(((now - newest) / 86400)) days old
         "
           fi
+          # Blindness: every raw-received dataset arrives as its own
+          # encryption root with a key this machine does not have. A
+          # stream that was not raw arrives with none; a key loaded here
+          # shows as available. The peer dataset itself is the plain
+          # container and is skipped.
+          while IFS=$'\t' read -r child prop val; do
+            [ "$child" = "$ds" ] && continue
+            case "$prop:$val" in
+              encryptionroot:"$child" | keystatus:unavailable | keystatus:none) ;;
+              encryptionroot:*) blind="$blind$child: not encrypted (encryptionroot $val); its stream was not raw
+        " ;;
+              keystatus:*) blind="$blind$child: its key is loaded on this machine (keystatus $val)
+        " ;;
+            esac
+          done < <(zfs get -r -H -o name,property,value encryptionroot,keystatus "$ds" 2>/dev/null)
         done
         if [ -n "$stale" ]; then
           printf '%s' "$stale" | ${config.core.alerts.package}/bin/alert-send "stale backups"
+          exit 1
+        fi
+        if [ -n "$blind" ]; then
+          printf '%s' "$blind" | ${config.core.alerts.package}/bin/alert-send "received data is not blind"
           exit 1
         fi
       '';
