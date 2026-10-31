@@ -6,9 +6,10 @@
 }:
 
 # ZFS support for data pools on attached drives: kernel module and
-# tools, pool import at boot, key loading, scrubs. The root stays on
-# btrfs; nothing here touches the install layout. docs/zfs.md has how
-# pools and keys are handled, and `core-zpool` creates a pool.
+# tools, pool import at boot, key loading, scrubs, pool-event alerts.
+# The root stays on btrfs; nothing here touches the install layout.
+# docs/zfs.md has how pools and keys are handled, and `core-zpool`
+# creates a pool.
 let
   cfg = config.core.zfs;
 
@@ -145,5 +146,44 @@ in
     };
 
     environment.systemPackages = [ zpoolWizard ];
+
+    core.alerts.onFailure = [
+      "zfs-scrub"
+    ]
+    # The pools' import units, which also load the keys.
+    ++ map (pool: "zfs-import-${pool}") cfg.pools;
+
+    # Pool events go to core.alerts.command. ZED runs every all-*.sh
+    # zedlet for every event; this one picks the ones that matter.
+    environment.etc."zfs/zed.d/all-core-alert.sh" = {
+      mode = "0555";
+      text = ''
+        #!${pkgs.runtimeShell}
+        # shellcheck disable=SC1091
+        . "''${ZED_ZEDLET_DIR}/zed-functions.sh"
+        send() { ${config.core.alerts.package}/bin/alert-send "$1"; }
+        zpool=${config.boot.zfs.package}/bin/zpool
+        case "$ZEVENT_SUBCLASS" in
+          statechange)
+            case "$ZEVENT_VDEV_STATE_STR" in
+              DEGRADED|FAULTED|REMOVED|UNAVAIL)
+                $zpool status "$ZEVENT_POOL" | send "pool $ZEVENT_POOL: vdev $ZEVENT_VDEV_PATH $ZEVENT_VDEV_STATE_STR" ;;
+            esac ;;
+          scrub_finish|resilver_finish)
+            if ! $zpool status -x "$ZEVENT_POOL" | ${pkgs.gnugrep}/bin/grep -q "is healthy"; then
+              $zpool status "$ZEVENT_POOL" | send "pool $ZEVENT_POOL: $ZEVENT_SUBCLASS with errors"
+            fi ;;
+          data)
+            # Data errors arrive in bursts; one alert per pool per hour.
+            zed_rate_limit "$ZEVENT_POOL;$ZEVENT_SUBCLASS;core-alert" 3600 || exit 0
+            $zpool status "$ZEVENT_POOL" | send "pool $ZEVENT_POOL: data error" ;;
+          deadman)
+            # A hung I/O; `zpool status` could hang too, so no status.
+            zed_rate_limit "$ZEVENT_POOL;$ZEVENT_SUBCLASS;core-alert" 3600 || exit 0
+            echo "vdev $ZEVENT_VDEV_PATH" | send "pool $ZEVENT_POOL: deadman (hung I/O)" ;;
+        esac
+        exit 0
+      '';
+    };
   };
 }
