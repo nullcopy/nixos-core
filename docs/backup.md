@@ -252,6 +252,11 @@ What is reported:
   snapshot is older than `core.backup.receive.maxAge` (3 days), or
   that has sent nothing yet. A sender that silently stopped produces
   no failure anywhere else; this is what notices it.
+- **Unblind data**, daily, on receivers: a received dataset with no
+  encryption root of its own — a sender sent without `-w` — or whose
+  key shows as available here. nixos-core senders cannot send
+  anything but raw (`send:encrypted`); a one-off sender outside it
+  has no such guard, and this is what catches it.
 - **Pool events**, from ZED: a vdev going DEGRADED, FAULTED, REMOVED
   or UNAVAIL; a scrub or resilver finishing with errors; data and
   deadman events, rate limited to one per pool per hour.
@@ -269,6 +274,11 @@ sudo zfs mount tank/recv/<peer>/encrypted     # must fail: key not loaded
 `zfs load-key` on a received dataset: the raw stream carries the
 sender's wrapped key, so the sender's passphrase would unlock it here
 too. Blindness is a rule on the receiver, not an impossibility.
+
+The daily stale check enforces what it can of the rule: a dataset
+under a peer whose `encryptionroot` is not itself arrived from a
+stream that was not raw, and a `keystatus` of `available` means its
+key was loaded here. Either alerts.
 
 ## Restoring
 
