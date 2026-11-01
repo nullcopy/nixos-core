@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# core-zpool: create a ZFS data pool on attached drives, in the layout
+# mkzpool: create a ZFS data pool on attached drives, in the layout
 # docs/zfs.md describes. Pick the disks and the topology; the disks
 # are wiped, the pool is created with the standard properties, and
 # <pool>/encrypted is created as an encryption root with a generated
@@ -17,7 +17,7 @@ while [[ $# -gt 0 ]]; do
     --no-encrypted) ENCRYPTED=0; shift ;;
     -h | --help)
       cat <<'USAGE'
-core-zpool [--config FILE | --no-config] [--pool NAME] [--no-encrypted]
+mkzpool [--config FILE | --no-config] [--pool NAME] [--no-encrypted]
 
 Create a ZFS data pool on attached drives (docs/zfs.md in nixos-core):
 pick disks and topology, wipe them, create the pool with the standard
@@ -36,7 +36,7 @@ USAGE
 done
 
 die() {
-  echo "core-zpool: $*" >&2
+  echo "mkzpool: $*" >&2
   exit 1
 }
 
@@ -66,8 +66,8 @@ if [[ -n $CONFIG ]]; then
   [[ -f $CONFIG ]] || die "$CONFIG does not exist (--config FILE, or --no-config)"
   case $(grep -c '^\s*core\.zfs\.enable = true;' "$CONFIG") in
     1) EDIT=1 ;;
-    0) echo "core-zpool: $CONFIG has no 'core.zfs.enable = true;' line; the lines to add are printed at the end" >&2 ;;
-    *) echo "core-zpool: $CONFIG has more than one 'core.zfs.enable = true;' line; the lines to add are printed at the end" >&2 ;;
+    0) echo "mkzpool: $CONFIG has no 'core.zfs.enable = true;' line; the lines to add are printed at the end" >&2 ;;
+    *) echo "mkzpool: $CONFIG has more than one 'core.zfs.enable = true;' line; the lines to add are printed at the end" >&2 ;;
   esac
 fi
 
@@ -204,7 +204,7 @@ if [[ $ENCRYPTED -eq 1 ]]; then
   # passphrase is printed if anything after this point fails, so it
   # cannot end up only inside the dataset.
   PASS=$(head -c 32 /dev/urandom | base64 | tr -d '\n=')
-  trap 'echo; echo "core-zpool: failed after the passphrase was made" >&2; print_passphrase >&2' ERR
+  trap 'echo; echo "mkzpool: failed after the passphrase was made" >&2; print_passphrase >&2' ERR
   install -d -m 700 /etc/zfs/keys
   (umask 077 && printf '%s\n' "$PASS" >"$KEYFILE")
   zfs create \
