@@ -35,10 +35,10 @@ docs/
   new-machine.md     # full walkthrough: machine repo -> install -> users
   fde.md             # disk-unlock management: passphrases, YubiKeys, token-only
   vpn.md             # VPN account setup and daily commands
-  zfs.md             # ZFS data pools: core.zfs and core-zpool
+  zfs.md             # ZFS data pools: core.zfs and mkzpool
 scripts/
   nixos-install.sh   # disk partitioning + install for a new machine
-  zpool-wizard.sh    # `core-zpool`: create a data pool on attached drives (disk selection, topology, tank/encrypted)
+  mkzpool.sh         # `mkzpool`: create a data pool on attached drives (disk selection, topology, tank/encrypted)
 ```
 
 ## Options

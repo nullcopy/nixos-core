@@ -1,8 +1,8 @@
-# ZFS data pools: `core.zfs` and `core-zpool`
+# ZFS data pools: `core.zfs` and `mkzpool`
 
 The root stays on btrfs. ZFS is for pools on other attached drives.
 `core.zfs` ([modules/zfs.nix](../modules/zfs.nix)) is the support
-every such machine needs; `core-zpool` creates the pool after the
+every such machine needs; `mkzpool` creates the pool after the
 install.
 
 ## `core.zfs`
@@ -51,17 +51,17 @@ core.zfs.arcMaxPercent = 25;              # ARC cap, % of RAM; null for ZFS's de
   the build fails loudly if a machine picks a kernel ZFS does not
   support yet, so `boot.kernelPackages = pkgs.linuxPackages_latest`
   may have to wait for ZFS.
-- **TRIM**: pools made by `core-zpool` have `autotrim=on` and
+- **TRIM**: pools made by `mkzpool` have `autotrim=on` and
   `zpool-trim` runs weekly; `zpool trim` skips devices without TRIM,
   so spinning disks are fine.
 
 ## Creating a pool
 
 Set `core.zfs.enable = true;` in `configuration.nix` and rebuild;
-`core-zpool` is then on the machine. Run it as root:
+`mkzpool` is then on the machine. Run it as root:
 
 ```sh
-sudo core-zpool
+sudo mkzpool
 nixos-rebuild switch --sudo
 ```
 
