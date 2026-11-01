@@ -123,12 +123,19 @@ in
 
     # zfs_arc_max is in bytes and RAM is known only at runtime, so the
     # cap is set once the module is loaded (boot.kernelModules has zfs)
-    # and before pools are imported.
+    # and before pools are imported. DefaultDependencies=no keeps the
+    # unit in the early boot transaction: with the default dependencies
+    # it is ordered after basic.target, and zfs-mount
+    # (Before=local-fs.target, After=zfs-import.target) turns that into
+    # an ordering cycle that systemd breaks by dropping the zfs-mount
+    # start job, leaving every dataset unmounted.
     systemd.services.zfs-arc-max = lib.mkIf (cfg.arcMaxPercent != null) {
       description = "Cap the ZFS ARC at ${toString cfg.arcMaxPercent}% of RAM";
       wantedBy = [ "multi-user.target" ];
+      unitConfig.DefaultDependencies = "no";
+      conflicts = [ "shutdown.target" ];
       after = [ "systemd-modules-load.service" ];
-      before = [ "zfs-import.target" ];
+      before = [ "shutdown.target" "zfs-import.target" ] ++ map (pool: "zfs-import-${pool}.service") cfg.pools;
       unitConfig.ConditionPathExists = "/sys/module/zfs/parameters/zfs_arc_max";
       serviceConfig = {
         Type = "oneshot";
