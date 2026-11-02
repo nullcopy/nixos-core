@@ -38,7 +38,7 @@ stays on btrfs and is not part of this.
 | Dataset | Holds | Encryption | Mounted |
 |---|---|---|---|
 | `tank` | the data pool, on the data disks | – | no |
-| `tank/encrypted` | this machine's own data; what replication covers | the ZFS encryption root, key in `/etc/zfs/keys/tank-encrypted` | `/tank` |
+| `tank/encrypted` | this machine's own data; what replication covers | the ZFS encryption root, key in `/etc/zfs/keys/tank-encrypted` | `/data` |
 | `tank/recv/<peer>` | raw backups from `<peer>` | the peer's key, never loaded here | never |
 
 The ZFS key on `tank/encrypted` exists for one reason: so a raw send
@@ -307,7 +307,7 @@ parent's key.
   `/etc/zfs/keys/tank-encrypted` was on the wiped root. Recreate it from
   the password manager ([zfs.md](zfs.md), Reinstalling); until then
   `zfs-import-tank` fails on the key (and alerts), `tank/encrypted`
-  stays unmounted, and `/tank` is an empty directory on the root.
+  stays unmounted, and `/data` is an empty directory on the root.
 - **Reinstalling a receiver** changes its host key and loses its
   accepted senders. Each sender's syncoid unit then fails on the host
   key (and alerts); remove the old one with `ssh-keygen -R <receiver>
