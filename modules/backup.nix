@@ -106,6 +106,13 @@ in
         assertion = config.services.openssh.enable;
         message = "core.backup.receive needs services.openssh.enable = true; senders log in over SSH.";
       }
+      {
+        # The receive account also sends: raw streams of its own
+        # encrypted dataset, which is how a restore pulls.
+        assertion =
+          lib.versionAtLeast (lib.versions.majorMinor config.boot.zfs.package.version) "2.4";
+        message = "core.backup.receive needs the send:encrypted delegation, OpenZFS 2.4 or newer; zfs is ${config.boot.zfs.package.version}.";
+      }
     ];
 
     # Each accepted sender's key, prefixed with `restrict`, written by
