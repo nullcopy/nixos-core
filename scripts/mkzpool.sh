@@ -8,16 +8,18 @@ set -euo pipefail
 
 CONFIG=/etc/nixos/configuration.nix
 POOL=tank
+MOUNTPOINT=/data
 ENCRYPTED=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --config) CONFIG=${2:?--config needs a file}; shift 2 ;;
     --no-config) CONFIG=; shift ;;
     --pool) POOL=${2:?--pool needs a name}; shift 2 ;;
+    --mountpoint) MOUNTPOINT=${2:?--mountpoint needs a path}; shift 2 ;;
     --no-encrypted) ENCRYPTED=0; shift ;;
     -h | --help)
       cat <<'USAGE'
-mkzpool [--config FILE | --no-config] [--pool NAME] [--no-encrypted]
+mkzpool [--config FILE | --no-config] [--pool NAME] [--mountpoint DIR] [--no-encrypted]
 
 Create a ZFS data pool on attached drives (docs/zfs.md in nixos-core):
 pick disks and topology, wipe them, create the pool with the standard
@@ -27,6 +29,7 @@ passphrase, and add the core.zfs lines to configuration.nix.
                   /etc/nixos/configuration.nix)
   --no-config     only print the lines to add
   --pool NAME     pool name (default tank)
+  --mountpoint DIR  where <pool>/encrypted mounts (default /data)
   --no-encrypted  no <pool>/encrypted dataset
 USAGE
       exit 0
@@ -55,6 +58,15 @@ fi
 KEYFILE=/etc/zfs/keys/$POOL-encrypted
 if [[ $ENCRYPTED -eq 1 && -e $KEYFILE ]]; then
   die "$KEYFILE exists (the key of an earlier $POOL?); move it away or pick another --pool"
+fi
+# The mountpoint is a property on <pool>/encrypted, independent of the
+# pool name. Check it here, before any disk is touched: a mount over a
+# non-empty directory would hide whatever is there.
+[[ $MOUNTPOINT == /* && $MOUNTPOINT != / ]] ||
+  die "bad mountpoint: $MOUNTPOINT (an absolute path other than /)"
+if [[ $ENCRYPTED -eq 1 && -d $MOUNTPOINT ]] &&
+  [[ -n "$(find "$MOUNTPOINT" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+  die "$MOUNTPOINT exists and is not empty; a mount there would hide its contents (pick --mountpoint)"
 fi
 
 # Whether configuration.nix can be edited is settled before anything is
@@ -167,7 +179,7 @@ if [[ $TOPOLOGY == single ]]; then SPEC=("${VDEVS[@]}"); else SPEC=("$TOPOLOGY" 
 echo
 echo "Plan:"
 echo "  zpool create $POOL ${SPEC[*]}"
-[[ $ENCRYPTED -eq 1 ]] && echo "  $POOL/encrypted  encrypted, mounted at /$POOL, key in $KEYFILE"
+[[ $ENCRYPTED -eq 1 ]] && echo "  $POOL/encrypted  encrypted, mounted at $MOUNTPOINT, key in $KEYFILE"
 echo
 echo "!!! This erases: ${CHOSEN[*]}. Type YES (all capitals) to continue:"
 read -r confirm
@@ -208,7 +220,7 @@ if [[ $ENCRYPTED -eq 1 ]]; then
   install -d -m 700 /etc/zfs/keys
   (umask 077 && printf '%s\n' "$PASS" >"$KEYFILE")
   zfs create \
-    -o mountpoint="/$POOL" \
+    -o mountpoint="$MOUNTPOINT" \
     -o encryption=aes-256-gcm -o keyformat=passphrase \
     -o keylocation="file://$KEYFILE" \
     "$POOL/encrypted"

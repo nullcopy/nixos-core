@@ -76,7 +76,9 @@ It takes the selection (each disk once) and the topology (single,
 mirror, raidz1, raidz2), asks for `YES`, wipes the disks, and creates
 `tank` with `ashift=12`, `autotrim=on`, `compression=zstd`,
 `atime=off`, `xattr=sa`, `acltype=posixacl`, `mountpoint=none` and
-`canmount=off`, and `tank/encrypted` mounted at `/tank` under a fresh
+`canmount=off`, and `tank/encrypted` mounted at `/data` — the
+mountpoint is a property, independent of the pool name, defaulting to
+`/data` and overridable with `--mountpoint` — under a fresh
 passphrase. The key file is written before the dataset is created,
 and if anything fails after the passphrase is made, it is printed.
 
