@@ -295,18 +295,33 @@ key was loaded here. Either alerts.
 
 ## Restoring onto a new machine
 
-A backup is data, not a system: install NixOS and this flake on the new
-machine as usual ([new-machine.md](new-machine.md)), then bring the
-dataset back. The receiver can raw-send it without ever holding the
-key — the stream stays ciphertext end to end — so all a restore needs
-from the receiver is its copy, and all it needs from you is the key,
+A backup is data, not a system: install NixOS and this flake on the
+new machine as usual ([new-machine.md](new-machine.md)), then pair it
+with the receiver and pull the dataset back. The receiver raw-sends it
+without ever holding the key — the stream stays ciphertext end to end
+— so a restore needs two things: the receiver's copy, and the key,
 kept somewhere other than the machine it protects.
 
-If instead the pool's disks survived and only the root was reinstalled,
-there is nothing to transfer: recreate the key file and load it
-([zfs.md](zfs.md), Reinstalling).
+If instead the pool's disks survived and only the root was
+reinstalled, there is nothing to transfer: recreate the key file and
+load it ([zfs.md](zfs.md), Reinstalling).
 
-### Prepare the new machine
+### On the receiver
+
+Pair the machine being restored under the name the data arrived as.
+`tank/recv/<name>` is where the backup lives, so a machine keeping its
+hostname is the same name, and a replacement machine is the old one:
+
+```sh
+sudo core-backup revoke hawkeye    # only while the old key is accepted
+sudo core-backup invite hawkeye
+```
+
+`revoke` keeps the dataset — it drops the account and its key — and
+`invite` prints a code for the next step. A machine that still holds
+the backup key it sent with can skip both and keep its pairing.
+
+### On the new machine
 
 Configuration first, so the restored dataset is imported and unlocked
 at boot:
@@ -345,40 +360,37 @@ sudo install -m 600 /path/to/saved/tank-encrypted /etc/zfs/keys/tank-encrypted
 
 Then `nixos-rebuild switch --sudo`.
 
-### Move the data back
-
-List what the receiver holds and pick the snapshot:
+The pull logs in as the paired account, so the new machine needs a
+backup key of its own — the same pairing a sender does
+([Pairing](#pairing)), as root here:
 
 ```sh
-zfs list -t snapshot -o name tank/recv/<peer>/encrypted
+install -d -m 755 /var/lib/backup
+ssh-keygen -t ed25519 -N "" -C "backup@$(hostname)" -f /var/lib/backup/key
+wormhole ssh accept -F /var/lib/backup <code>
 ```
 
-Pull it, as root on the new machine, with a send permission delegated
-to an admin on the receiver. Delegating avoids needing sudo on the far
-side of a binary pipe, which cannot be a tty:
+(A machine running `core.backup.send` already made that key at first
+boot; `core-backup join <code>` then replaces the last two lines.)
+
+Then, still as root, list what the receiver holds and pull the
+snapshot:
 
 ```sh
-# on the receiver, once:
-sudo zfs allow -u <admin> send tank/recv/<peer>
+ssh -i /var/lib/backup/key recv-hawkeye@obelisk \
+  zfs list -t snapshot -o name tank/recv/hawkeye/encrypted
 
-# on the new machine, as root:
-ssh <admin>@<receiver> \
-  zfs send -w -R tank/recv/<peer>/encrypted@<snapshot> | \
+ssh -i /var/lib/backup/key recv-hawkeye@obelisk \
+  zfs send -w -R tank/recv/hawkeye/encrypted@<snapshot> | \
   zfs receive -u tank/encrypted
 ```
 
-The push form works from the receiver as well, but its remote `sudo`
-must then run without a password:
+The account's delegation includes `send:encrypted`, so this needs no
+sudo and no `zfs allow` on the receiver, and the most it can return is
+raw streams of encrypted datasets. Run it in `tmux`; an interrupted
+receive resumes like any other ([Sending by hand](#sending-by-hand)).
 
-```sh
-sudo zfs send -w -R tank/recv/<peer>/encrypted@<snapshot> | \
-  ssh <admin>@<machine> sudo zfs receive -u tank/encrypted
-```
-
-Afterwards, on the receiver: `sudo zfs unallow -u <admin> send
-tank/recv/<peer>`.
-
-### Unlock, mount, verify
+Once the data is back:
 
 ```sh
 sudo zfs load-key -r tank/encrypted      # the parent and every child
