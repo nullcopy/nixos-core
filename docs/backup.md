@@ -280,26 +280,124 @@ under a peer whose `encryptionroot` is not itself arrived from a
 stream that was not raw, and a `keystatus` of `available` means its
 key was loaded here. Either alerts.
 
-## Restoring
+## Restoring onto a new machine
 
-A restore is a raw send in the other direction, to the original
-machine or to any fresh pool, followed by `zfs load-key` with the
-passphrase there. Nothing on the receiver is needed beyond the
-datasets, which is why the passphrase must exist somewhere other than
-the machine it protects.
+A backup is data, not a system: install NixOS and this flake on the new
+machine as usual ([new-machine.md](new-machine.md)), then bring the
+dataset back. The receiver can raw-send it without ever holding the
+key — the stream stays ciphertext end to end — so all a restore needs
+from the receiver is its copy, and all it needs from you is the key,
+kept somewhere other than the machine it protects.
 
-```sh
-# on the receiver, as the admin (root logins are off)
-sudo zfs send -w -R tank/recv/<peer>/encrypted@<snapshot> | \
-  ssh <admin>@<machine> sudo zfs receive -u tank/encrypted
-# on the machine
-sudo zfs load-key tank/encrypted      # the recorded passphrase
-sudo zfs mount tank/encrypted
+If instead the pool's disks survived and only the root was reinstalled,
+there is nothing to transfer: recreate the key file and load it
+([zfs.md](zfs.md), Reinstalling).
+
+### Prepare the new machine
+
+Configuration first, so the restored dataset is imported and unlocked
+at boot:
+
+```nix
+core.zfs.enable = true;
+core.zfs.pools = [ "tank" ];
+core.zfs.unlock = [ "tank/encrypted" ];
+services.openssh.enable = true;
 ```
 
-Children sent with `--recursive` arrive as their own encryption
-roots; after a restore, `zfs change-key -i` on each re-inherits the
-parent's key.
+Create the pool without an encrypted dataset:
+
+```sh
+sudo mkzpool --no-encrypted
+```
+
+Without `--no-encrypted`, `mkzpool` creates its own `tank/encrypted`
+with a fresh passphrase, and the restore has nowhere to land. The
+restore brings back the original encryption root, its key location and
+its mountpoint. `mkzpool` writes the `core.zfs.pools` line; add the
+`core.zfs.unlock` line yourself for the dataset being restored.
+
+The key file goes where the backup expects it. A nixos-core sender
+keeps it at `/etc/zfs/keys/<pool>-encrypted` ([zfs.md](zfs.md),
+Reinstalling); a sender that keeps a key file elsewhere records that
+path in the stream, and the received dataset shows it as
+`keylocation`. Recreate the path from your copy, or point at the copy
+directly when loading the key:
+
+```sh
+sudo install -d -m 700 /etc/zfs/keys
+sudo install -m 600 /path/to/saved/tank-encrypted /etc/zfs/keys/tank-encrypted
+# or: sudo zfs load-key -L file:///path/to/saved/tank-encrypted tank/encrypted
+```
+
+Then `nixos-rebuild switch --sudo`.
+
+### Move the data back
+
+List what the receiver holds and pick the snapshot:
+
+```sh
+zfs list -t snapshot -o name tank/recv/<peer>/encrypted
+```
+
+Pull it, as root on the new machine, with a send permission delegated
+to an admin on the receiver. Delegating avoids needing sudo on the far
+side of a binary pipe, which cannot be a tty:
+
+```sh
+# on the receiver, once:
+sudo zfs allow -u <admin> send tank/recv/<peer>
+
+# on the new machine, as root:
+ssh <admin>@<receiver> \
+  zfs send -w -R tank/recv/<peer>/encrypted@<snapshot> | \
+  zfs receive -u tank/encrypted
+```
+
+The push form works from the receiver as well, but its remote `sudo`
+must then run without a password:
+
+```sh
+sudo zfs send -w -R tank/recv/<peer>/encrypted@<snapshot> | \
+  ssh <admin>@<machine> sudo zfs receive -u tank/encrypted
+```
+
+Afterwards, on the receiver: `sudo zfs unallow -u <admin> send
+tank/recv/<peer>`.
+
+### Unlock, mount, verify
+
+```sh
+sudo zfs load-key -r tank/encrypted      # the parent and every child
+sudo zfs mount -a
+sudo zfs get keystatus tank/encrypted    # available
+```
+
+The restored dataset carries the sender's mountpoint; set it before
+mounting if this machine wants another (`zfs set mountpoint=/data
+tank/encrypted`, children inherit).
+
+Children sent with `--recursive` arrive as their own encryption roots;
+`zfs change-key -i` on each re-inherits the parent's key, so later key
+changes on the parent propagate.
+
+Then check it is the data you think it is. A checksum manifest made on
+the source before it was wiped proves the files:
+
+```sh
+sudo sh -c 'cd /data && sha256sum -c /path/to/manifest.sha256'
+```
+
+A scrub proves every block against the checksums the sender recorded,
+reading only this machine's disks:
+
+```sh
+sudo zpool scrub tank && sudo zpool status -v tank
+```
+
+One thing that bites: a machine that already has a `tank/encrypted`
+refuses the receive. `--no-encrypted` is the way to avoid it;
+otherwise restore under another name and `zfs rename` it into place.
 
 ## Things to know
 

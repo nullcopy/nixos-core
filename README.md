@@ -39,7 +39,7 @@ docs/
   fde.md             # disk-unlock management: passphrases, YubiKeys, token-only
   vpn.md             # VPN account setup and daily commands
   zfs.md             # ZFS data pools: core.zfs and mkzpool
-  backup.md          # ZFS-native backups between machines: design, pool layout, procedures
+  backup.md          # ZFS-native backups between machines: design, pool layout, procedures, restoring onto a new machine
 scripts/
   nixos-install.sh   # disk partitioning + install for a new machine
   mkzpool.sh         # `mkzpool`: create a data pool on attached drives (disk selection, topology, tank/encrypted)
@@ -88,6 +88,11 @@ The summary is:
    system.
 2. After the first boot, each user clones their own dotfiles repo. Each
    user applies it with standalone home-manager.
+
+Reinstalling a machine that kept its data on a `tank` pool: install as
+above, then bring the dataset back from a peer's backup —
+[docs/backup.md](docs/backup.md#restoring-onto-a-new-machine),
+"Restoring onto a new machine".
 
 ## Day to day
 
