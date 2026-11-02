@@ -18,7 +18,10 @@ Two choices follow from that:
   per-sender account with delegated `zfs` permissions that exclude
   `destroy`, `rollback` and forced receives. The receiver prunes under
   its own policy, with its own account. A compromised sender can stop sending; it
-  cannot take its history on the receiver with it.
+  cannot take its history on the receiver with it. It can send its own
+  dataset back — raw streams of encrypted datasets, nothing else —
+  which is what a restore pulls ([Restoring onto a new
+  machine](#restoring-onto-a-new-machine)).
 
 The modules, all in [modules/](../modules):
 
@@ -90,6 +93,12 @@ system account (uid in 55000–55999, no home, no password), the
 dataset, the delegation and the quota, and writes the key, prefixed
 with `restrict`, to `/var/lib/backup/authorized_keys/recv-<name>`,
 which sshd reads. The state lives in `/var/lib/backup/recv/<name>`.
+
+The delegation lets the account send as well as receive:
+`send:encrypted` returns that account its own dataset as raw streams
+of encrypted datasets and nothing more. Pairing a machine again after
+a reinstall is therefore all a restore needs from the receiver
+([Restoring onto a new machine](#restoring-onto-a-new-machine)).
 
 ```sh
 sudo core-backup list              # name, quota, space used, newest snapshot
@@ -274,6 +283,10 @@ sudo zfs mount tank/recv/<peer>/encrypted     # must fail: key not loaded
 `zfs load-key` on a received dataset: the raw stream carries the
 sender's wrapped key, so the sender's passphrase would unlock it here
 too. Blindness is a rule on the receiver, not an impossibility.
+
+The account's `send:encrypted` does not weaken this: the most it can
+return is raw streams of encrypted datasets, which are ciphertext
+here and unlock only where the key is.
 
 The daily stale check enforces what it can of the rule: a dataset
 under a peer whose `encryptionroot` is not itself arrived from a
