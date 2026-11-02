@@ -88,7 +88,7 @@ ensure_user() {
     # SYS_UID_MAX" on every run; the uid is explicit anyway.
     useradd --uid "$uid" --gid nogroup --no-create-home \
       --home-dir /var/empty --shell /run/current-system/sw/bin/bash \
-      --comment "core-backup: receives from $name" "$user"
+      --comment "core-backup receives from $name" "$user"
     usermod --password '*' "$user"
   fi
 }
