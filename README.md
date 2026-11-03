@@ -33,6 +33,7 @@ modules/
   backup-send.nix    # core.backup.send — push raw replication of this machine's datasets to peers (syncoid)
   alerts.nix         # core.alerts — one command every alert goes through: failed units, stale backups, pool events
   caddy.nix          # core.caddy.enable — TLS termination for forwarded :80/:443; ACME + a vhost→upstream map
+  wireguard.nix      # core.wireguard.enable — a static tunnel to a relay; peers are host routes only
 templates/
   machine/           # scaffold for a new machine repo
 docs/
@@ -78,6 +79,8 @@ a machine enables it.
 - `core.caddy.enable` — TLS termination for a machine that receives
   forwarded :80/:443: ACME certificates and a vhost→upstream map, with
   the ports opened only on the named interfaces.
+- `core.wireguard.enable` — a static WireGuard tunnel to a relay; every
+  peer's AllowedIPs must be a host route.
 
 ## New machine setup
 
