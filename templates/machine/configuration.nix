@@ -15,12 +15,12 @@
 
   ## ----- nixos-core toggles ------------------------------------------------
   # See modules/ in nixos-core for what each option enables.
-  core.desktop.enable = false; # niri + greetd + audio + Wayland plumbing
-  core.nymvpn.enable = false; # NymVPN: machine-wide tunnel; no egress until the admin runs `nym-vpnc connect`
-  core.obscura.enable = false; # Obscura VPN: machine-wide tunnel; no egress until the admin runs `obscura connect`
-  core.tailscale.enable = false; # tailscale daemon; the admin runs `sudo tailscale up` manually
-  core.zfs.enable = false; # ZFS for data pools on attached drives; `mkzpool` creates one (docs/zfs.md)
-  core.backup.receive.enable = false; # accept raw ZFS backups from senders paired with `core-backup invite` (docs/backup.md)
+  # core.desktop.enable = true; # niri + greetd + audio + Wayland plumbing
+  # core.nymvpn.enable = true; # NymVPN: machine-wide tunnel; no egress until the admin runs `nym-vpnc connect`
+  # core.obscura.enable = true; # Obscura VPN: machine-wide tunnel; no egress until the admin runs `obscura connect`
+  # core.tailscale.enable = true; # tailscale daemon; the admin runs `sudo tailscale up` manually
+  # core.zfs.enable = true; # ZFS for data pools on attached drives; `mkzpool` creates one (docs/zfs.md)
+  # core.backup.receive.enable = true; # accept raw ZFS backups from senders paired with `core-backup invite` (docs/backup.md)
   # core.backup.send.datasets."tank/encrypted".to = [ "obelisk" ]; # push raw backups to peers (docs/backup.md)
   # core.alerts.command = "..."; # where failed units, stale backups and pool events go (docs/backup.md)
   # core.caddy.enable = true; # TLS termination for forwarded :80/:443; set virtualHosts and openFirewallInterfaces
