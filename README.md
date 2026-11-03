@@ -32,6 +32,9 @@ modules/
   backup.nix         # core.backup.receive — accept raw ZFS replication from paired senders; the core-backup command
   backup-send.nix    # core.backup.send — push raw replication of this machine's datasets to peers (syncoid)
   alerts.nix         # core.alerts — one command every alert goes through: failed units, stale backups, pool events
+  caddy.nix          # core.caddy.enable — TLS termination for forwarded :80/:443; ACME + a vhost→upstream map
+  wireguard.nix      # core.wireguard.enable — a static tunnel to a relay; peers are host routes only
+  headscale.nix      # core.headscale.enable — the tailnet control server, on loopback with its state on a dataset
 templates/
   machine/           # scaffold for a new machine repo
 docs/
@@ -74,6 +77,13 @@ a machine enables it.
   encrypted datasets to peers on a schedule ([docs/backup.md](docs/backup.md)).
 - `core.alerts.command` — where failed units, stale backups and pool
   events are reported ([docs/backup.md](docs/backup.md)).
+- `core.caddy.enable` — TLS termination for a machine that receives
+  forwarded :80/:443: ACME certificates and a vhost→upstream map, with
+  the ports opened only on the named interfaces.
+- `core.wireguard.enable` — a static WireGuard tunnel to a relay; every
+  peer's AllowedIPs must be a host route.
+- `core.headscale.enable` — the headscale control server, on loopback
+  with its database and keys on a dataset.
 
 ## New machine setup
 
