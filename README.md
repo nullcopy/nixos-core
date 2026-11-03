@@ -34,6 +34,7 @@ modules/
   alerts.nix         # core.alerts — one command every alert goes through: failed units, stale backups, pool events
   caddy.nix          # core.caddy.enable — TLS termination for forwarded :80/:443; ACME + a vhost→upstream map
   wireguard.nix      # core.wireguard.enable — a static tunnel to a relay; peers are host routes only
+  headscale.nix      # core.headscale.enable — the tailnet control server, on loopback with its state on a dataset
 templates/
   machine/           # scaffold for a new machine repo
 docs/
@@ -81,6 +82,8 @@ a machine enables it.
   the ports opened only on the named interfaces.
 - `core.wireguard.enable` — a static WireGuard tunnel to a relay; every
   peer's AllowedIPs must be a host route.
+- `core.headscale.enable` — the headscale control server, on loopback
+  with its database and keys on a dataset.
 
 ## New machine setup
 

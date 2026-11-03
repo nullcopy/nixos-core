@@ -15,5 +15,6 @@
     ./alerts.nix
     ./caddy.nix
     ./wireguard.nix
+    ./headscale.nix
   ];
 }

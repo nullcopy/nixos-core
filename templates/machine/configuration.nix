@@ -25,6 +25,7 @@
   # core.alerts.command = "..."; # where failed units, stale backups and pool events go (docs/backup.md)
   # core.caddy.enable = true; # TLS termination for forwarded :80/:443; set virtualHosts and openFirewallInterfaces
   # core.wireguard.enable = true; # a static tunnel to a relay; set address, privateKeyFile and peers
+  # core.headscale.enable = true; # the tailnet control server; set serverUrl
 
   # Optional: FIDO2 token unlock of the root volume at boot. Enroll
   # with systemd-cryptenroll after the install (docs/fde.md in
