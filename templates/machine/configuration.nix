@@ -23,6 +23,7 @@
   core.backup.receive.enable = false; # accept raw ZFS backups from senders paired with `core-backup invite` (docs/backup.md)
   # core.backup.send.datasets."tank/encrypted".to = [ "obelisk" ]; # push raw backups to peers (docs/backup.md)
   # core.alerts.command = "..."; # where failed units, stale backups and pool events go (docs/backup.md)
+  # core.caddy.enable = true; # TLS termination for forwarded :80/:443; set virtualHosts and openFirewallInterfaces
 
   # Optional: FIDO2 token unlock of the root volume at boot. Enroll
   # with systemd-cryptenroll after the install (docs/fde.md in

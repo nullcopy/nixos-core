@@ -32,6 +32,7 @@ modules/
   backup.nix         # core.backup.receive — accept raw ZFS replication from paired senders; the core-backup command
   backup-send.nix    # core.backup.send — push raw replication of this machine's datasets to peers (syncoid)
   alerts.nix         # core.alerts — one command every alert goes through: failed units, stale backups, pool events
+  caddy.nix          # core.caddy.enable — TLS termination for forwarded :80/:443; ACME + a vhost→upstream map
 templates/
   machine/           # scaffold for a new machine repo
 docs/
@@ -74,6 +75,9 @@ a machine enables it.
   encrypted datasets to peers on a schedule ([docs/backup.md](docs/backup.md)).
 - `core.alerts.command` — where failed units, stale backups and pool
   events are reported ([docs/backup.md](docs/backup.md)).
+- `core.caddy.enable` — TLS termination for a machine that receives
+  forwarded :80/:443: ACME certificates and a vhost→upstream map, with
+  the ports opened only on the named interfaces.
 
 ## New machine setup
 

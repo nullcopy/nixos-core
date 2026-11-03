@@ -13,5 +13,6 @@
     ./backup.nix
     ./backup-send.nix
     ./alerts.nix
+    ./caddy.nix
   ];
 }
