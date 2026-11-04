@@ -24,7 +24,7 @@
   # core.backup.send.datasets."tank/encrypted".to = [ "obelisk" ]; # push raw backups to peers (docs/backup.md)
   # core.alerts.command = "..."; # where failed units, stale backups and pool events go (docs/backup.md)
   # core.caddy.enable = true; # TLS termination for forwarded :80/:443; set virtualHosts and openFirewallInterfaces
-  # core.wireguardExit.enable = true; # a full tunnel to a relay you run; set address, privateKeyFile and relay (docs/vpn.md)
+  # core.wireguardExit.enable = true; # a full tunnel to a relay you run; set address and relay (docs/vpn.md)
   # core.headscale.enable = true; # the tailnet control server; set serverUrl
 
   # Optional: FIDO2 token unlock of the root volume at boot. Enroll
