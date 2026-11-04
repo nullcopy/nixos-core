@@ -15,7 +15,7 @@
     ./backup-send.nix
     ./alerts.nix
     ./caddy.nix
-    ./wireguard.nix
+    ./wireguard-exit.nix
     ./headscale.nix
   ];
 }

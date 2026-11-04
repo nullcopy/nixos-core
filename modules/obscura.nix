@@ -23,8 +23,8 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       {
-        assertion = !config.core.nymvpn.enable;
-        message = "core.obscura.enable and core.nymvpn.enable are both set; one VPN daemon owns the default route.";
+        assertion = !(config.core.nymvpn.enable || config.core.wireguardExit.enable);
+        message = "core.obscura.enable is set with core.nymvpn.enable or core.wireguardExit.enable; one full tunnel owns the default route.";
       }
     ];
 
