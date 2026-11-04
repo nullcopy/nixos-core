@@ -7,6 +7,7 @@
     ./desktop.nix
     ./fde.nix
     ./tailscale.nix
+    ./vpn-gate.nix
     ./nymvpn.nix
     ./obscura.nix
     ./zfs.nix
