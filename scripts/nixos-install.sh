@@ -174,6 +174,30 @@ check "$TARGET/flake.nix" "nixosConfigurations\.$HOSTNAME([^A-Za-z0-9_-]|$)" \
 check "$TARGET/configuration.nix" "users\.users\.$ADMINUSER([^A-Za-z0-9_-]|$)" \
   "users.users.$ADMINUSER is declared in configuration.nix"
 
+# A tunnel address as address/prefix, IPv4 or IPv6. The peer stanza below
+# is built from it and the module hands it to the interface, so catch a
+# typo at the prompt rather than later.
+valid_cidr() { # ADDRESS/PREFIX
+  local addr prefix octet
+  [[ "$1" == */* ]] || return 1
+  addr="${1%%/*}"
+  prefix="${1#*/}"
+  [[ "$prefix" =~ ^[0-9]+$ ]] || return 1
+  if [[ "$addr" == *:* ]]; then
+    (( prefix <= 128 )) || return 1
+    [[ "$addr" =~ ^[0-9A-Fa-f:]+$ ]] || return 1
+  else
+    (( prefix <= 32 )) || return 1
+    [[ "$addr" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+    local IFS=.
+    local -a octets
+    read -r -a octets <<<"$addr"
+    for octet in "${octets[@]}"; do
+      (( octet <= 255 )) || return 1
+    done
+  fi
+}
+
 # Review shell: bash on /dev/tty, exit status ignored so a failure here
 # survives set -e. A fresh scaffold has every core.* toggle off, so this
 # is where configuration.nix gets its settings. Edits are committed.
@@ -189,6 +213,66 @@ if [[ ! "$reply" =~ ^[Nn] ]]; then
   echo ">>> Type 'exit' to continue the install."
   (cd "$TARGET" && bash -i </dev/tty >/dev/tty 2>&1) || true
   commit "Configure $HOSTNAME"
+fi
+
+# The WireGuard exit needs its client key on the target root before the
+# first boot, and the relay needs the matching public key. Generate the
+# key, fill in the tunnel address if the config leaves it out, and print
+# the peer stanza for the relay's machine repo.
+if grep -qE '^[[:space:]]*core\.wireguardExit\.enable[[:space:]]*=[[:space:]]*true' \
+  "$TARGET/configuration.nix"; then
+  IFACE="$(sed -n 's|^[[:space:]]*core\.wireguardExit\.interface[[:space:]]*=[[:space:]]*"\([^"]*\)".*|\1|p' \
+    "$TARGET/configuration.nix" | head -n1)"
+  IFACE="${IFACE:-wg0}"
+  ADDR="$(sed -n 's|^[[:space:]]*core\.wireguardExit\.address[[:space:]]*=[[:space:]]*"\([^"]*\)".*|\1|p' \
+    "$TARGET/configuration.nix" | head -n1)"
+  if [[ -z "$ADDR" ]]; then
+    # A hostname-derived default inside the tunnel subnet. The relay's
+    # repo is the registry of these addresses, so change it there if the
+    # number is taken.
+    octet=$(( $(printf '%s' "$HOSTNAME" | cksum | cut -d' ' -f1) % 250 + 2 ))
+    while :; do
+      read -e -r -p "Tunnel address (core.wireguardExit.address): " -i "10.99.99.$octet/24" ADDR
+      valid_cidr "$ADDR" && break
+      echo "Use address/prefix, such as 10.99.99.$octet/24 or fd00::7/64."
+    done
+    sed -i "s|^\([[:space:]]*core\.wireguardExit\.enable[[:space:]]*=[[:space:]]*true;.*\)\$|\1\n  core.wireguardExit.address = \"$ADDR\";|" \
+      "$TARGET/configuration.nix"
+    commit "Set the WireGuard exit address for $HOSTNAME"
+  elif ! valid_cidr "$ADDR"; then
+    echo ">>> WARNING: core.wireguardExit.address is \"$ADDR\"; that is not"
+    echo ">>> address/prefix, so the peer stanza below may be wrong."
+  fi
+
+  # wireguard-tools is not on the live ISO; take it from the ISO's
+  # nixpkgs, as git above.
+  PATH="$(dirname "$(nix-shell -p wireguard-tools --run 'command -v wg')"):$PATH"
+  install -d -m 0755 /mnt/etc/wireguard
+  (umask 077; wg genkey >"/mnt/etc/wireguard/$IFACE.key")
+  chmod 0600 "/mnt/etc/wireguard/$IFACE.key"
+  echo
+  echo ">>> Wrote the client key to /mnt/etc/wireguard/$IFACE.key (root, 0600)."
+  PUB="$(wg pubkey <"/mnt/etc/wireguard/$IFACE.key")"
+
+  echo ">>> On the relay's machine repo, add this peer to the relay's own"
+  echo ">>> networking.wireguard.interfaces.<relay interface>.peers and rebuild"
+  echo ">>> the relay BEFORE this machine's first boot:"
+  echo
+  # A host route for the client: /32 for IPv4, /128 for IPv6.
+  mask=32
+  if [[ "$ADDR" == *:* ]]; then mask=128; fi
+  echo "  { publicKey = \"$PUB\"; allowedIPs = [ \"${ADDR%%/*}/$mask\" ]; }"
+  echo
+  echo ">>> Until the relay knows this key, the exit gate holds and this"
+  echo ">>> machine has no network egress. docs/vpn.md has both ends."
+elif grep -q "core\.wireguardExit" "$TARGET/configuration.nix"; then
+  echo
+  echo ">>> WARNING: configuration.nix mentions core.wireguardExit without a"
+  echo ">>> 'core.wireguardExit.enable = true;' line, so no client key was"
+  echo ">>> generated and no peer stanza printed. If the module is enabled,"
+  echo ">>> do it by hand before the first boot (docs/vpn.md):"
+  echo ">>>   sudo wg genkey | sudo tee /etc/wireguard/wg0.key >/dev/null"
+  echo ">>>   sudo chmod 600 /etc/wireguard/wg0.key && sudo wg pubkey < /etc/wireguard/wg0.key"
 fi
 
 echo ">>> Proceed with nixos-install? Type YES (all capitals) to continue:"
