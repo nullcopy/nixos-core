@@ -226,6 +226,20 @@ in
         speaks next.
       '';
     };
+
+    dns = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "10.99.99.1";
+      description = ''
+        The relay's resolver address, reachable through the tunnel. When
+        set, resolved takes it as its default route for DNS, so lookups
+        leave through the tunnel. A search domain the link learned from
+        DHCP still claims its own names, and the gate drops those
+        queries, so they fail rather than leak. Without it, resolution
+        fails: the resolver the link provides is dropped too.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -281,6 +295,61 @@ in
             inherit (cfg) persistentKeepalive;
           }
         ];
+      };
+    };
+
+    services.resolved.settings.Resolve = lib.mkIf (cfg.dns != null) {
+      DNS = [ cfg.dns ];
+      # All domains resolve through the relay's resolver; the per-link
+      # servers from DHCP would only be dropped by the gate.
+      Domains = [ "~." ];
+    };
+
+    ## ----- boot gate -----------------------------------------------------------
+    # wg-quick installs no firewall of its own, so the gate is kept for
+    # the machine's lifetime rather than lifted once the tunnel is up: a
+    # service bound to the physical interface's address then cannot
+    # leak. It allows the tunnel interface (WireGuard links are not
+    # `oifkind "tun"`), the relay's own address (so the handshake can
+    # leave before the tunnel exists), tailscale's carve-outs, the LAN
+    # and link scope, and it drops DNS that is not routed through the
+    # tunnel. See modules/vpn-gate.nix for the unit, docs/vpn.md for
+    # daily use.
+    core.internal.egressGates = lib.mkIf (missing == [ ]) {
+      "wireguard-exit-gate" = {
+        description = "Block network egress while the WireGuard exit tunnel is down";
+        hook = "output";
+        forward = true;
+        forwardRules = [ "oifname \"${cfg.interface}\" accept" ];
+        packages = [ pkgs.wireguard-tools ];
+        egressRules = [
+          "# Tailscale's tunnel device and its marked underlay traffic."
+          "meta oifkind \"tun\" accept"
+          "meta mark & 0x00ff0000 == 0x00080000 accept"
+          "# The relay's own address, so the handshake can leave first."
+          "${if relay.family == 6 then "ip6" else "ip"} daddr ${relay.address} udp dport ${relay.port} accept"
+          "# Everything else leaves through the tunnel, DNS included."
+          "oifname \"${cfg.interface}\" accept"
+        ];
+        keepTable = true;
+        wait = ''
+          # The tunnel interface appears later in the boot. A handshake
+          # needs the relay to answer; the usual reason one never does is
+          # a public key the relay has not registered.
+          tries=0
+          until wg show ${cfg.interface} latest-handshakes 2>/dev/null | grep -qE '[[:space:]][1-9][0-9]*$'; do
+            tries=$((tries + 1))
+            if [ "$tries" -ge 36 ]; then
+              echo "wireguard-exit-gate: no handshake on ${cfg.interface} after 3 minutes." >&2
+              echo "The relay probably has no peer with this machine's public key." >&2
+              echo "Register it (docs/vpn.md), then check 'wg show ${cfg.interface}'." >&2
+              echo "This machine has no egress through the gate. Lift it for this boot with:" >&2
+              echo "  systemctl stop wireguard-exit-gate" >&2
+              break
+            fi
+            sleep 5
+          done
+        '';
       };
     };
   };
