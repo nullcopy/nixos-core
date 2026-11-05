@@ -324,7 +324,7 @@ in
         packages = [ pkgs.wireguard-tools ];
         egressRules = [
           "# Tailscale's tunnel device and its marked underlay traffic."
-          "meta oifkind \"tun\" accept"
+          "oifname \"tailscale0\" accept"
           "meta mark & 0x00ff0000 == 0x00080000 accept"
           "# The relay's own address, so the handshake can leave first."
           "${if relay.family == 6 then "ip6" else "ip"} daddr ${relay.address} udp dport ${relay.port} accept"

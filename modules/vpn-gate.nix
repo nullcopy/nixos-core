@@ -243,4 +243,11 @@ in
       ] "cgroup:inet:${gate.table}:daemon"
     ) (lib.filter (gate: gate.cgroupUnit != null) (lib.attrValues gates))
   );
+
+  # A gate that fails to install or keep its table fails open: the unit
+  # removes the table on any stop, an error included, so a gate that
+  # never came up protects nothing. Surface it through core.alerts; the
+  # failure is otherwise only in the journal. Names are without the
+  # .service suffix.
+  config.core.alerts.onFailure = lib.attrNames gates;
 }

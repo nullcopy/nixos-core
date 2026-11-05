@@ -15,7 +15,8 @@
 
 let
   # To update: bump version, then hash (from the release, or from the
-  # first failed rebuild).
+  # first failed rebuild). The gate below matches the daemon by cgroup
+  # and by `oifkind "tun"`; re-check both against the release.
   version = "2026.10.0";
 
   nym-vpn-core = pkgs.stdenv.mkDerivation {

@@ -13,7 +13,9 @@
 
     # Obscura VPN's client is not in nixpkgs; its flake builds the daemon
     # and CLI from source (see modules/obscura.nix). The tag pin makes
-    # updates manual. The rust-overlay revision the client pins predates
+    # updates manual; the gate in modules/obscura.nix matches the daemon
+    # by fwmark and interface name, so re-check both when bumping the
+    # tag. The rust-overlay revision the client pins predates
     # a nixpkgs change to fetchurl's default name and fails to unpack
     # the toolchain, so the client gets a current rust-overlay instead.
     rust-overlay = {
