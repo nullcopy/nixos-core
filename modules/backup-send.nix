@@ -226,7 +226,10 @@ in
           lib.nameValuePair j.name {
             inherit (j) source target;
             sendOptions = "w"; # raw: the receiver gets ciphertext and the wrapped key
-            recvOptions = "u"; # the receiver cannot mount it anyway
+            # No mount; and do not carry this dataset's mountpoint or
+            # canmount to the receiver, which pins them itself and never
+            # mounts what it receives.
+            recvOptions = "u x mountpoint x canmount";
             sshKey = credentialPath j.name;
             service = {
               after = [ "backup-keygen.service" ];

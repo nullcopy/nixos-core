@@ -96,8 +96,11 @@ which sshd reads. The state lives in `/var/lib/backup/recv/<name>`.
 
 The delegation lets the account send as well as receive:
 `send:encrypted` returns that account its own dataset as raw streams
-of encrypted datasets and nothing more. Pairing a machine again after
-a reinstall is therefore all a restore needs from the receiver
+of encrypted datasets and nothing more. It carries no `mount`,
+`mountpoint` or `canmount`: a received dataset is never mounted on the
+receiver, and those properties would otherwise be the sender's to
+choose. Pairing a machine again after a reinstall is therefore all a
+restore needs from the receiver
 ([Restoring onto a new machine](#restoring-onto-a-new-machine)).
 
 ```sh
@@ -126,6 +129,14 @@ delegation (reset to exactly the list in `core-backup`) and quota.
 The quota is a ZFS `quota` on the sender's dataset, which the sender
 cannot change; without one, a runaway or compromised sender fills the
 pool.
+
+`backup-recv-pin.service` pins every received dataset to
+`mountpoint=none` and `canmount=off`, at boot and every 15 minutes.
+The receive account has no `mount`, `mountpoint` or `canmount`
+permission, so it cannot mount what it receives; the pin covers a
+stream that carries properties of its own (a sender's `zfs send -R`),
+so a later `zfs mount -a` cannot place a received dataset somewhere
+unexpected.
 
 `sanoid` prunes the received snapshots by
 `core.backup.receive.retention` (60 daily, 24 monthly, 3 yearly by
@@ -212,14 +223,16 @@ SNAP=backup-$(date +%F)
 zfs snapshot -r tank/encrypted@$SNAP
 zfs send -w -R tank/encrypted@$SNAP | pv | \
   ssh -i /var/lib/backup/key recv-<me>@<receiver> \
-    zfs receive -u -s tank/recv/<me>/encrypted
+    zfs receive -u -x mountpoint -x canmount -s tank/recv/<me>/encrypted
 ```
 
 - `-w` is raw. The first stream of a dataset decides: raw sends and
   non-raw sends cannot be mixed in one incremental chain, so always
   send raw.
 - `-R` carries every child dataset, every snapshot and the
-  properties.
+  properties. The receiver does not delegate `mountpoint` or
+  `canmount`, so exclude them with `-x` as above; without it the
+  receive is refused.
 - `-u` on the receive skips mounting, which could not succeed without
   the key anyway. `-s` makes an interrupted receive resumable: read
   the token with `zfs get receive_resume_token` on the receiver and
@@ -341,8 +354,9 @@ sudo mkzpool --no-encrypted
 
 Without `--no-encrypted`, `mkzpool` creates its own `tank/encrypted`
 with a fresh passphrase, and the restore has nowhere to land. The
-restore brings back the original encryption root, its key location and
-its mountpoint. `mkzpool` writes the `core.zfs.pools` line; add the
+restore brings back the original encryption root and its key location;
+its mountpoint was pinned to `none` on the receiver, so set it after
+restoring (below). `mkzpool` writes the `core.zfs.pools` line; add the
 `core.zfs.unlock` line yourself for the dataset being restored.
 
 The key file goes where the backup expects it. A nixos-core sender
@@ -398,9 +412,9 @@ sudo zfs mount -a
 sudo zfs get keystatus tank/encrypted    # available
 ```
 
-The restored dataset carries the sender's mountpoint; set it before
-mounting if this machine wants another (`zfs set mountpoint=/data
-tank/encrypted`, children inherit).
+The received copy was pinned to `mountpoint=none` on the receiver; set
+one before mounting if this machine wants it (`zfs set
+mountpoint=/data tank/encrypted`, children inherit).
 
 Children sent with `--recursive` arrive as their own encryption roots;
 `zfs change-key -i` on each re-inherits the parent's key, so later key

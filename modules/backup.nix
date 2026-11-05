@@ -152,8 +152,39 @@ in
 
     core.alerts.onFailure = [
       "backup-receive-setup"
+      "backup-recv-pin"
       "sanoid"
     ];
+
+    # A raw stream from a sender outside nixos-core can carry its own
+    # mountpoint and canmount (a `zfs send -R`), and the receive account
+    # cannot be told from this end to refuse them. Pin every received
+    # dataset to no mountpoint, so neither root's later `zfs mount -a`
+    # nor the account (which has no `mount` permission) can put one on
+    # the filesystem. This also repairs datasets received before the
+    # delegation dropped those properties.
+    systemd.services.backup-recv-pin = {
+      description = "Pin received backup datasets to no mountpoint";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "zfs-import.target" "backup-receive-setup.service" ];
+      requires = [ "zfs-import.target" ];
+      # Re-run through the boot, so a streamed mountpoint does not
+      # outlive the send that set it by long.
+      startAt = "*:0/15";
+      path = [
+        config.boot.zfs.package
+        pkgs.coreutils
+      ];
+      serviceConfig.Type = "oneshot";
+      script = ''
+        zfs list -H -o name -t filesystem -r ${lib.escapeShellArg cfg.receive.dataset} 2>/dev/null |
+          while IFS= read -r ds; do
+            [ "$ds" = ${lib.escapeShellArg cfg.receive.dataset} ] && continue
+            zfs set canmount=off "$ds" 2>/dev/null || true
+            zfs set mountpoint=none "$ds" 2>/dev/null || true
+          done
+      '';
+    };
 
     # A sender that stopped sending produces no failure anywhere, and a
     # sender outside nixos-core has no kernel-enforced raw-only send:

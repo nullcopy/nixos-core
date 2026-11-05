@@ -26,11 +26,13 @@ UID_MAX=55999
 # `receive -F`), no rollback, no destroy, no hold: a sender adds
 # snapshots and can neither remove what it sent before nor keep this
 # machine from pruning it. The encryption properties are what a raw
-# stream sets on the datasets it creates. send:encrypted returns the
-# account its own data — raw streams of encrypted datasets, which is
-# how a restore pulls, and ciphertext only, so the receiver stays
-# blind.
-PERMISSIONS=send:encrypted,receive:append,create,mount,userprop,canmount,mountpoint,compression,encryption,keyformat,keylocation,pbkdf2iters
+# stream sets on the datasets it creates. No mount, canmount or
+# mountpoint: a received dataset is never mounted here, and those
+# properties would otherwise be the sender's to choose. send:encrypted
+# returns the account its own data — raw streams of encrypted datasets,
+# which is how a restore pulls, and ciphertext only, so the receiver
+# stays blind.
+PERMISSIONS=send:encrypted,receive:append,create,userprop,compression,encryption,keyformat,keylocation,pbkdf2iters
 
 die() {
   echo "core-backup: $*" >&2
