@@ -33,7 +33,8 @@ modules/
   backup-send.nix    # core.backup.send — push raw replication of this machine's datasets to peers (syncoid)
   alerts.nix         # core.alerts — one command every alert goes through: failed units, stale backups, pool events
   caddy.nix          # core.caddy.enable — TLS termination for forwarded :80/:443; ACME + a vhost→upstream map
-  wireguard.nix      # core.wireguard.enable — a static tunnel to a relay; peers are host routes only
+  vpn-gate.nix       # internal: the boot egress gate nymvpn/obscura/wireguard-exit declare
+  wireguard-exit.nix # core.wireguardExit.enable — a full tunnel to a relay; everything but the relay enters it
   headscale.nix      # core.headscale.enable — the tailnet control server, on loopback with its state on a dataset
 templates/
   machine/           # scaffold for a new machine repo
@@ -80,8 +81,9 @@ a machine enables it.
 - `core.caddy.enable` — TLS termination for a machine that receives
   forwarded :80/:443: ACME certificates and a vhost→upstream map, with
   the ports opened only on the named interfaces.
-- `core.wireguard.enable` — a static WireGuard tunnel to a relay; every
-  peer's AllowedIPs must be a host route.
+- `core.wireguardExit.enable` — a full-tunnel WireGuard exit: all
+  traffic but the relay's own address enters the tunnel, and a boot gate
+  blocks egress until it is up ([docs/vpn.md](docs/vpn.md)).
 - `core.headscale.enable` — the headscale control server, on loopback
   with its database and keys on a dataset.
 

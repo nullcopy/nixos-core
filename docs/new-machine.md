@@ -56,8 +56,10 @@ The install script:
    commits it all with the pre-commit hook active.
 3. Prints `ok`/`WARNING` checks (hostname, flake attribute, admin user)
    and opens a shell in the repo to edit `configuration.nix` (next
-   section). Edits are committed on exit. Then it asks for a second
-   `YES`.
+   section). Edits are committed on exit. If the config enables the
+   WireGuard exit, it then writes the client key to the target root and
+   prints the peer stanza the relay needs ([docs/vpn.md](vpn.md)),
+   before it asks for a second `YES`.
 4. Runs `nixos-install` (the first install takes a while), asks for
    `ADMINUSER`'s login password, and hands the repo to `ADMINUSER`.
 
@@ -85,6 +87,7 @@ A complete headless-server example:
   core.desktop.enable = false;      # niri + greetd + audio + Wayland plumbing
   core.nymvpn.enable = true;        # NymVPN: machine-wide tunnel, manual `nym-vpnc connect` — see docs/vpn.md
   core.obscura.enable = false;      # Obscura VPN instead of NymVPN: one of the two — see docs/vpn.md
+  core.wireguardExit.enable = false; # full tunnel to a relay you run; needs address and relay — see docs/vpn.md
   core.tailscale.enable = true;     # tailscale daemon, manual `sudo tailscale up` — see docs/vpn.md
   # core.fde.fido2.enable = true;   # YubiKey disk unlock — see step 4
 
@@ -137,10 +140,13 @@ The `core.*` options (source in [modules/](../modules)):
 | `core.tailscale.enable` | tailscale daemon; the admin runs `sudo tailscale up` / `down`, tailnet traffic only ([docs/vpn.md](vpn.md)) |
 | `core.nymvpn.enable` | NymVPN daemon + CLI; no network egress after boot until the admin runs `nym-vpnc connect`, then machine-wide default route ([docs/vpn.md](vpn.md)) |
 | `core.obscura.enable` | Obscura VPN daemon + CLI; no network egress after boot until the admin runs `obscura connect`, then machine-wide default route; exclusive with `core.nymvpn.enable` ([docs/vpn.md](vpn.md)) |
+| `core.wireguardExit.enable` | Full-tunnel WireGuard exit to a relay you run; set `address`, `relay` (and `dns`), and register the client's public key on the relay before the first boot ([docs/vpn.md](vpn.md)) |
 | `core.zfs.enable` | ZFS for data pools on attached drives: hostname-derived hostId, import at boot (`core.zfs.pools`), key loading (`core.zfs.unlock`), scrubs ([docs/zfs.md](zfs.md)) |
 | `core.backup.receive.enable` | Accept raw ZFS replication from senders paired with `core-backup invite`; blind storage ([docs/backup.md](backup.md)) |
 | `core.backup.send.datasets` | Push raw replication of this machine's encrypted datasets to peers on a schedule ([docs/backup.md](backup.md)) |
 | `core.alerts.command` | Where failed units, stale backups and pool events are reported ([docs/backup.md](backup.md)) |
+| `core.caddy.enable` | TLS termination for a machine that receives forwarded :80/:443; set `virtualHosts` and `openFirewallInterfaces` |
+| `core.headscale.enable` | The headscale tailnet control server, on loopback with its data on a dataset; set `serverUrl` |
 
 `base.nix` values carry `lib.mkDefault`, so overrides here take effect
 without conflicts.
@@ -225,13 +231,15 @@ Then `nixos-rebuild switch --sudo`, enroll a token, and
 reboot to test: token inserted → PIN + touch; token absent → passphrase
 prompt.
 
-## 5. Optional: VPNs (tailscale / NymVPN / Obscura)
+## 5. Optional: VPNs (tailscale / NymVPN / Obscura / WireGuard exit)
 
 **On the target machine, as the admin user.**
 
 VPN membership is machine policy; only the admin configures it, and a
 login works without any VPN credentials. The account setup and the
-daily commands for each VPN are in [docs/vpn.md](vpn.md).
+daily commands for each VPN are in [docs/vpn.md](vpn.md). The WireGuard
+exit is set up in `configuration.nix` before the first boot instead; it
+has no account and no connect step.
 
 ## 6. Each user sets up their home
 
