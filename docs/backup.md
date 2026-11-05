@@ -94,6 +94,16 @@ dataset, the delegation and the quota, and writes the key, prefixed
 with `restrict`, to `/var/lib/backup/authorized_keys/recv-<name>`,
 which sshd reads. The state lives in `/var/lib/backup/recv/<name>`.
 
+The account has a login shell: syncoid needs one on this end, and
+`restrict` does not stop it running commands, so an accepted sender —
+or anyone holding its key — can run commands as `recv-<name>`. The
+delegation keeps it away from other senders' data and from anything
+owned by root, but it is a shell: accept only machines you control.
+`core.backup.receive` also defaults `services.openssh` to key-only and
+leaves :22 closed on the firewall, opened on the tailnet interface
+when `core.tailscale` is on; open the port where your senders reach
+the machine if they use another path.
+
 The delegation lets the account send as well as receive:
 `send:encrypted` returns that account its own dataset as raw streams
 of encrypted datasets and nothing more. Pairing a machine again after

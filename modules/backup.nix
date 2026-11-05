@@ -119,6 +119,24 @@ in
     # core-backup. Root-owned, so StrictModes is satisfied.
     services.openssh.authorizedKeysFiles = [ "/var/lib/backup/authorized_keys/%u" ];
 
+    # Senders log in over SSH. Keep the daemon key-only: `restrict` in a
+    # receive key stops port and agent forwarding and a pty, but not
+    # running commands, so an accepted sender has a shell as
+    # `recv-<name>`. These are defaults, so a machine still chooses; the
+    # template sets the same password options.
+    services.openssh.settings = {
+      PasswordAuthentication = lib.mkDefault false;
+      KbdInteractiveAuthentication = lib.mkDefault false;
+      PermitRootLogin = lib.mkDefault "no";
+    };
+
+    # Do not open :22 on every interface. Senders arrive over the
+    # tailnet, so open it there and leave the rest to the machine.
+    services.openssh.openFirewall = lib.mkDefault false;
+    networking.firewall.interfaces = lib.mkIf config.core.tailscale.enable {
+      "tailscale0".allowedTCPPorts = config.services.openssh.ports;
+    };
+
     environment.systemPackages = [
       coreBackup
       # What syncoid runs on this end besides zfs.
