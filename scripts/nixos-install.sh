@@ -182,20 +182,53 @@ valid_cidr() { # ADDRESS/PREFIX
   [[ "$1" == */* ]] || return 1
   addr="${1%%/*}"
   prefix="${1#*/}"
-  [[ "$prefix" =~ ^[0-9]+$ ]] || return 1
+  # No leading zeros: "099" is not a number bash arithmetic can read.
+  [[ "$prefix" =~ ^(0|[1-9][0-9]*)$ ]] || return 1
   if [[ "$addr" == *:* ]]; then
     (( prefix <= 128 )) || return 1
     [[ "$addr" =~ ^[0-9A-Fa-f:]+$ ]] || return 1
   else
     (( prefix <= 32 )) || return 1
-    [[ "$addr" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
     local IFS=.
     local -a octets
     read -r -a octets <<<"$addr"
+    (( ${#octets[@]} == 4 )) || return 1
     for octet in "${octets[@]}"; do
+      [[ "$octet" =~ ^(0|[1-9][0-9]{0,2})$ ]] || return 1
       (( octet <= 255 )) || return 1
     done
   fi
+}
+
+# A WireGuard key: 32 base64-encoded bytes, so 44 characters ending in
+# "=", which is what `wg pubkey` prints.
+valid_wg_key() { # KEY
+  [[ "$1" =~ ^[A-Za-z0-9+/]{43}=$ ]]
+}
+
+# address:port, with an IPv6 address in brackets. Mirrors the module's
+# endpoint assertion, apart from the IPv6 group structure it also checks.
+valid_endpoint() { # ADDRESS:PORT
+  local addr port octet
+  if [[ "$1" =~ ^\[([0-9A-Fa-f:]+)\]:([1-9][0-9]*)$ ]]; then
+    addr="${BASH_REMATCH[1]}"
+    port="${BASH_REMATCH[2]}"
+    [[ "$addr" == *:* ]] || return 1
+  elif [[ "$1" =~ ^([0-9.]+):([1-9][0-9]*)$ ]]; then
+    addr="${BASH_REMATCH[1]}"
+    port="${BASH_REMATCH[2]}"
+    local IFS=.
+    local -a octets
+    read -r -a octets <<<"$addr"
+    (( ${#octets[@]} == 4 )) || return 1
+    for octet in "${octets[@]}"; do
+      [[ "$octet" =~ ^(0|[1-9][0-9]{0,2})$ ]] || return 1
+      (( octet <= 255 )) || return 1
+    done
+  else
+    return 1
+  fi
+  (( port <= 65535 ))
 }
 
 # Review shell: bash on /dev/tty, exit status ignored so a failure here
@@ -216,9 +249,9 @@ if [[ ! "$reply" =~ ^[Nn] ]]; then
 fi
 
 # The WireGuard exit needs its client key on the target root before the
-# first boot, and the relay needs the matching public key. Generate the
-# key, fill in the tunnel address if the config leaves it out, and print
-# the peer stanza for the relay's machine repo.
+# first boot, and the relay needs the matching public key. Fill in the
+# tunnel address and the relay if the config leaves them out, generate
+# the key, and print the peer stanza for the relay's machine repo.
 if grep -qE '^[[:space:]]*core\.wireguardExit\.enable[[:space:]]*=[[:space:]]*true' \
   "$TARGET/configuration.nix"; then
   IFACE="$(sed -n 's|^[[:space:]]*core\.wireguardExit\.interface[[:space:]]*=[[:space:]]*"\([^"]*\)".*|\1|p' \
@@ -226,6 +259,16 @@ if grep -qE '^[[:space:]]*core\.wireguardExit\.enable[[:space:]]*=[[:space:]]*tr
   IFACE="${IFACE:-wg0}"
   ADDR="$(sed -n 's|^[[:space:]]*core\.wireguardExit\.address[[:space:]]*=[[:space:]]*"\([^"]*\)".*|\1|p' \
     "$TARGET/configuration.nix" | head -n1)"
+  RELAY_PUB="$(sed -n 's|^[[:space:]]*core\.wireguardExit\.relay\.publicKey[[:space:]]*=[[:space:]]*"\([^"]*\)".*|\1|p' \
+    "$TARGET/configuration.nix" | head -n1)"
+  RELAY_EP="$(sed -n 's|^[[:space:]]*core\.wireguardExit\.relay\.endpoint[[:space:]]*=[[:space:]]*"\([^"]*\)".*|\1|p' \
+    "$TARGET/configuration.nix" | head -n1)"
+
+  # What the config leaves out is prompted for and written into it, in
+  # one commit. A relay written as an attribute set is left alone: the
+  # greps above would not find its keys, and prompting would add
+  # duplicate definitions.
+  insert=()
   if [[ -z "$ADDR" ]]; then
     # A hostname-derived default inside the tunnel subnet. The relay's
     # repo is the registry of these addresses, so change it there if the
@@ -236,23 +279,65 @@ if grep -qE '^[[:space:]]*core\.wireguardExit\.enable[[:space:]]*=[[:space:]]*tr
       valid_cidr "$ADDR" && break
       echo "Use address/prefix, such as 10.99.99.$octet/24 or fd00::7/64."
     done
-    sed -i "s|^\([[:space:]]*core\.wireguardExit\.enable[[:space:]]*=[[:space:]]*true;.*\)\$|\1\n  core.wireguardExit.address = \"$ADDR\";|" \
-      "$TARGET/configuration.nix"
-    commit "Set the WireGuard exit address for $HOSTNAME"
+    insert+=("core.wireguardExit.address = \"$ADDR\";")
   elif ! valid_cidr "$ADDR"; then
     echo ">>> WARNING: core.wireguardExit.address is \"$ADDR\"; that is not"
     echo ">>> address/prefix, so the peer stanza below may be wrong."
+  fi
+  if grep -qE 'core\.wireguardExit\.relay[[:space:]]*=' "$TARGET/configuration.nix"; then
+    echo
+    echo ">>> core.wireguardExit.relay is set as an attribute set; leaving it"
+    echo ">>> alone. Check its publicKey and endpoint by hand."
+  else
+    if [[ -z "$RELAY_PUB" ]]; then
+      echo
+      echo ">>> The relay's public key, from the relay itself:"
+      echo ">>>   sudo wg show <relay interface> public-key"
+      while :; do
+        read -e -r -p "Relay public key: " RELAY_PUB
+        valid_wg_key "$RELAY_PUB" && break
+        echo "That is not a WireGuard public key: 44 base64 characters ending in '='."
+      done
+      insert+=("core.wireguardExit.relay.publicKey = \"$RELAY_PUB\";")
+    fi
+    if [[ -z "$RELAY_EP" ]]; then
+      while :; do
+        read -e -r -p "Relay endpoint, address:port ([v6]:port for IPv6): " RELAY_EP
+        valid_endpoint "$RELAY_EP" && break
+        echo "Use address:port, such as 203.0.113.10:51820 or [2001:db8::1]:51820."
+      done
+      insert+=("core.wireguardExit.relay.endpoint = \"$RELAY_EP\";")
+    fi
+  fi
+  if (( ${#insert[@]} > 0 )); then
+    # One sed expression, so the newlines have to be escapes rather than
+    # literal: sed ends its s command at a real newline.
+    block=""
+    for line in "${insert[@]}"; do
+      block="$block\\n  $line"
+    done
+    sed -i "s|^\([[:space:]]*core\.wireguardExit\.enable[[:space:]]*=[[:space:]]*true;.*\)\$|\1$block|" \
+      "$TARGET/configuration.nix"
+    commit "Set the WireGuard exit options for $HOSTNAME"
   fi
 
   # wireguard-tools is not on the live ISO; take it from the ISO's
   # nixpkgs, as git above.
   PATH="$(dirname "$(nix-shell -p wireguard-tools --run 'command -v wg')"):$PATH"
   install -d -m 0755 /mnt/etc/wireguard
-  (umask 077; wg genkey >"/mnt/etc/wireguard/$IFACE.key")
-  chmod 0600 "/mnt/etc/wireguard/$IFACE.key"
-  echo
-  echo ">>> Wrote the client key to /mnt/etc/wireguard/$IFACE.key (root, 0600)."
-  PUB="$(wg pubkey <"/mnt/etc/wireguard/$IFACE.key")"
+  KEY="/mnt/etc/wireguard/$IFACE.key"
+  if [[ -s "$KEY" ]]; then
+    # Restored from a backup during the review shell, or placed here by
+    # hand: the relay's entry for this key is already correct.
+    echo
+    echo ">>> Keeping the existing key at $KEY; the relay needs no change."
+  else
+    (umask 077; wg genkey >"$KEY")
+    echo
+    echo ">>> Wrote the client key to $KEY (root, 0600)."
+  fi
+  chmod 0600 "$KEY"
+  PUB="$(wg pubkey <"$KEY")"
 
   echo ">>> On the relay's machine repo, add this peer to the relay's own"
   echo ">>> networking.wireguard.interfaces.<relay interface>.peers and rebuild"
