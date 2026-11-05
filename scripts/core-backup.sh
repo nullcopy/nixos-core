@@ -57,7 +57,7 @@ check_name() {
 # One public key, no options: the line has to start with the key type,
 # so nothing like command="..." can ride along.
 check_key() {
-  local re='^(ssh-ed25519|ecdsa-sha2-nistp(256|384|521)|ssh-rsa) [A-Za-z0-9+/]+=* ?[^[:cntrl:]]*$'
+  local re='^(ssh-ed25519|ecdsa-sha2-nistp(256|384|521)) [A-Za-z0-9+/]+=* ?[^[:cntrl:]]*$'
   [[ $1 =~ $re ]] || die "not a single SSH public key line"
 }
 

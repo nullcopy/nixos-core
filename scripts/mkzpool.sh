@@ -84,11 +84,16 @@ if [[ -n $CONFIG ]]; then
 fi
 
 # A stable name for zpool create: the first by-id link that is not a
-# wwn or eui alias, so `zpool status` reads like the drive label.
+# wwn or eui alias, so `zpool status` reads like the drive label. With
+# no by-id link, by-path is stable across reboots too (it moves with the
+# port, not the enumeration); the kernel name is the last resort.
 by_id() { # /dev/sdX
   local link
   for link in /dev/disk/by-id/*; do
     [[ $link == */wwn-* || $link == */nvme-eui.* ]] && continue
+    [[ $(readlink -f "$link") == "$1" ]] && { echo "$link"; return; }
+  done
+  for link in /dev/disk/by-path/*; do
     [[ $(readlink -f "$link") == "$1" ]] && { echo "$link"; return; }
   done
   echo "$1"

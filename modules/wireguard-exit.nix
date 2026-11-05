@@ -264,6 +264,12 @@ in
         '';
       }
       {
+        # A private key in the world-readable store is a leak, and the
+        # option is documented as a root-only file.
+        assertion = !(lib.hasPrefix "/nix/store/" privateKeyFile);
+        message = "core.wireguardExit.privateKeyFile is ${privateKeyFile}, in the Nix store; it must be a root-only file outside it. See docs/vpn.md.";
+      }
+      {
         # nymvpn and obscura are full tunnels too, and one owns the
         # default route. With both, the exit's gate would not identify
         # the daemon's traffic, so the daemon could never connect.

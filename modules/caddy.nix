@@ -91,6 +91,13 @@ in
     services.caddy = {
       enable = true;
       inherit (cfg) email acmeCA;
+      # Caddy's admin API listens on localhost:2019 with no
+      # authentication, so any local user can reconfigure the proxy. It
+      # exists for `caddy reload`; restart on a config change instead and
+      # turn it off. A machine that wants reloading sets
+      # services.caddy.enableReload = true, which drops the `admin off`.
+      enableReload = lib.mkDefault false;
+      globalConfig = lib.mkIf (!config.services.caddy.enableReload) "admin off";
       virtualHosts = lib.mapAttrs (name: vh: {
         extraConfig = ''
           reverse_proxy ${vh.upstream}
