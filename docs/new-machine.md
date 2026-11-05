@@ -53,7 +53,9 @@ The install script:
 2. Creates the machine repo at `/mnt/etc/nixos` from the
    nixos-core template with `HOSTNAME` and `ADMINUSER` filled in,
    generates `hardware-configuration.nix`, creates `flake.lock`, and
-   commits it all with the pre-commit hook active.
+   commits it all. Its own commits do not run the repo's hooks — a repo
+   cloned from elsewhere would otherwise run its `.githooks/pre-commit`
+   as root — and it enables `.githooks` for your commits afterward.
 3. Prints `ok`/`WARNING` checks (hostname, flake attribute, admin user)
    and opens a shell in the repo to edit `configuration.nix` (next
    section). Edits are committed on exit. If the config enables the

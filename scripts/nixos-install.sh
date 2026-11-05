@@ -108,22 +108,24 @@ TARGET="/mnt/etc/nixos"
 mkdir -p "$(dirname "$TARGET")"
 
 # Stage everything in the repo and commit when something changed, with
-# an explicit identity (the live ISO has none).
+# an explicit identity (the live ISO has none) and without running the
+# repo's hooks: these commits run as root, and a machine repo cloned
+# from elsewhere could carry any .githooks/pre-commit. core.hooksPath is
+# handed to the admin's own commits once the installer is finished.
 commit() { # MESSAGE
   git -C "$TARGET" add -A
   [[ -z "$(git -C "$TARGET" status --porcelain)" ]] ||
     git -C "$TARGET" -c "user.name=$ADMINUSER" -c "user.email=$ADMINUSER@$HOSTNAME" \
-      commit -q -m "$1"
+      -c core.hooksPath=/dev/null commit -q -m "$1"
 }
 
 if [[ -n "$MACHINE_REPO" ]]; then
   git clone "$MACHINE_REPO" "$TARGET"
-  git -C "$TARGET" config core.hooksPath .githooks
 else
   # Scaffold from the template and fill in the placeholders. `nix flake
   # init` writes every file without its executable bit, and git ignores
-  # a hook it cannot execute. The hook path is set before the first
-  # commit so the nixfmt pre-commit hook covers every commit.
+  # a hook it cannot execute. The hook is enabled below, after the
+  # installer's own commits.
   mkdir "$TARGET"
   (cd "$TARGET" && nix flake init -t "$CORE#machine")
   chmod +x "$TARGET/.githooks/pre-commit"
@@ -132,7 +134,6 @@ else
   sed -i "s/^\(\s*services\.openssh\.enable = \)false;/\1$SSH;/" \
     "$TARGET/configuration.nix"
   git -C "$TARGET" init -q -b main
-  git -C "$TARGET" config core.hooksPath .githooks
   commit "Scaffold $HOSTNAME from the nixos-core machine template"
 fi
 
@@ -274,6 +275,11 @@ elif grep -q "core\.wireguardExit" "$TARGET/configuration.nix"; then
   echo ">>>   sudo wg genkey | sudo tee /etc/wireguard/wg0.key >/dev/null"
   echo ">>>   sudo chmod 600 /etc/wireguard/wg0.key && sudo wg pubkey < /etc/wireguard/wg0.key"
 fi
+
+# The installer is done committing; hand the formatter hook to the repo
+# for the admin's later commits. No hook from the repo ran while this
+# script ran as root.
+git -C "$TARGET" config core.hooksPath .githooks
 
 echo ">>> Proceed with nixos-install? Type YES (all capitals) to continue:"
 read -r confirm
