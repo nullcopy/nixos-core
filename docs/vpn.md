@@ -125,8 +125,16 @@ before the gate lets anything out, and the gate drops DNS.
 ### The relay side
 
 There is no relay module. Any machine that can run WireGuard serves:
-its `configuration.nix` uses `networking.wireguard.interfaces`
-directly, with one host-route peer per client:
+give it a keypair first, since clients need its public key, and its
+`configuration.nix` uses `networking.wireguard.interfaces` directly,
+with one host-route peer per client:
+
+```sh
+sudo install -d -m 700 /etc/wireguard
+wg genkey | sudo tee /etc/wireguard/wg0.key >/dev/null
+sudo chmod 600 /etc/wireguard/wg0.key
+sudo wg pubkey < /etc/wireguard/wg0.key    # what clients set as relay.publicKey
+```
 
 ```nix
 networking.wireguard.interfaces.wg0 = {
@@ -160,15 +168,22 @@ at.
 
 ### Key generation and ordering
 
-When the machine config enables the exit, the install script generates
-the client key on the target root — `/etc/wireguard/<interface>.key`,
-root, mode 0600, on the LUKS root — and prints the peer line the relay
+When the machine config enables the exit, the install script asks for
+whatever the config leaves out — the tunnel address, the relay's public
+key (`sudo wg show wg0 public-key` on the relay) and the relay's
+endpoint — writes the answers into `configuration.nix`, generates the
+client key on the target root, and prints the peer line the relay
 needs, a host route for the client's tunnel address (`/32` for IPv4,
 `/128` for IPv6):
 
 ```nix
 { publicKey = "…"; allowedIPs = [ "10.99.99.7/32" ]; }
 ```
+
+A key already at `/etc/wireguard/<interface>.key` is kept and reused,
+and the printed stanza is derived from it, so a key restored during the
+review shell keeps the machine's identity and the relay's existing entry
+stays valid.
 
 **Register that line in the relay's repo and rebuild the relay before
 the machine's first boot.** The gate is up from early boot and only
