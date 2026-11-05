@@ -275,9 +275,17 @@ What is reported:
 On the receiver, after the first send:
 
 ```sh
+sudo core-backup selftest
 sudo zfs get -r encryption,keystatus,encryptionroot,mounted tank/recv
 sudo zfs mount tank/recv/<peer>/encrypted     # must fail: key not loaded
 ```
+
+`core-backup selftest` runs the checks above in one pass: the parent
+dataset, and for each accepted sender its dataset, account, uid, key
+file and delegation (it must carry `send:encrypted` and
+`receive:append`, and no `mount`, `mountpoint` or `canmount`), the
+quota, and whether the received data is blind. It prints `ok`/`FAIL`
+per check and exits non-zero on any failure.
 
 `keystatus` is `unavailable` on every received dataset. Never run
 `zfs load-key` on a received dataset: the raw stream carries the

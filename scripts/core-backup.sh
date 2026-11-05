@@ -43,6 +43,7 @@ core-backup invite NAME [--quota SIZE] [--yes]   accept a sender, key sent over 
 core-backup accept NAME KEY [--quota SIZE]       accept a sender, key given on the command line
 core-backup list                                  accepted senders, quota, use, newest snapshot
 core-backup revoke NAME                           stop accepting a sender; its backups stay
+core-backup selftest                              check the receiver's datasets, accounts, keys, delegation
 core-backup key                                   this machine's backup public key
 core-backup join CODE                             send this machine's key to an invite
 USAGE
@@ -243,6 +244,130 @@ cmd_join() {
   exec wormhole ssh accept --yes -F "$STATE" "$1"
 }
 
+# On-demand check of the receiver side, for after a pairing: the parent
+# dataset, and for each accepted sender its dataset, account, uid, key
+# file, delegation and quota, and whether what it sent is blind. The
+# daily backup-stale unit checks the last two; this is the same answer
+# now, for the first send.
+selftest_rc=0
+report() { # STATUS MESSAGE
+  printf '%-5s %s\n' "$1" "$2"
+  case $1 in FAIL) selftest_rc=1 ;; esac
+}
+
+cmd_selftest() {
+  need_root
+  selftest_rc=0
+  local name ds user uid keyfile allow quota newest age notblind child prop val perms
+
+  echo "core-backup selftest: receiver state for $DATASET"
+  if zfs list -H -o name "$DATASET" >/dev/null 2>&1; then
+    report ok "parent dataset $DATASET"
+  else
+    report FAIL "parent dataset $DATASET is missing (is the pool imported?)"
+    return 1
+  fi
+
+  for name in $(peers); do
+    echo
+    echo "$name:"
+    ds=$DATASET/$name
+    user=recv-$name
+
+    if zfs list -H -o name "$ds" >/dev/null 2>&1; then
+      report ok "dataset $ds"
+    else
+      report FAIL "dataset $ds is missing"
+    fi
+
+    uid=""
+    [[ -r $PEERS/$name/uid ]] && uid=$(<"$PEERS/$name/uid")
+    if getent passwd "$user" >/dev/null; then
+      if [[ -n $uid && $(id -u "$user") == "$uid" ]]; then
+        report ok "account $user with uid $uid"
+      else
+        report FAIL "account $user has uid $(id -u "$user"), expected ${uid:-unknown}"
+      fi
+    else
+      report FAIL "account $user is missing"
+    fi
+
+    keyfile=$KEYS/$user
+    if [[ -f $keyfile ]]; then
+      report ok "key file $keyfile"
+      if [[ $(head -c 9 "$keyfile" 2>/dev/null) == "restrict " ]]; then
+        report ok "key starts with restrict"
+      else
+        report FAIL "key does not start with restrict"
+      fi
+      perms=$(stat -c '%a %U' "$keyfile")
+      if [[ $perms == "644 root" ]]; then
+        report ok "key file is root-owned 0644"
+      else
+        report FAIL "key file is $perms (want 644 root)"
+      fi
+    else
+      report FAIL "key file $keyfile is missing"
+    fi
+
+    allow=$(zfs allow "$ds" 2>/dev/null || true)
+    if grep -q 'send:encrypted' <<<"$allow"; then
+      report ok "delegation has send:encrypted"
+    else
+      report FAIL "delegation is missing send:encrypted"
+    fi
+    if grep -q 'receive:append' <<<"$allow"; then
+      report ok "delegation has receive:append"
+    else
+      report FAIL "delegation is missing receive:append"
+    fi
+    if grep -qwE 'mount|mountpoint|canmount' <<<"$allow"; then
+      report FAIL "delegation still carries mount, mountpoint or canmount"
+    else
+      report ok "delegation carries no mount, mountpoint or canmount"
+    fi
+
+    quota=$(zfs get -H -o value quota "$ds" 2>/dev/null || echo -)
+    report ok "quota $quota"
+
+    newest=$(zfs list -H -p -o creation -t snapshot -r "$ds" 2>/dev/null | sort -n | tail -1)
+    if [[ -n $newest ]]; then
+      age=$(( $(date +%s) - newest ))
+      report ok "newest snapshot is $(( age / 3600 ))h old"
+    else
+      report info "nothing received yet"
+    fi
+
+    notblind=""
+    while IFS=$'\t' read -r child prop val; do
+      if [[ $child == "$ds" ]]; then
+        continue
+      fi
+      case "$prop:$val" in
+        encryptionroot:"$child" | keystatus:unavailable | keystatus:none) ;;
+        *)
+          if [[ " $notblind " != *" $child "* ]]; then
+            notblind="$notblind $child"
+          fi
+          ;;
+      esac
+    done < <(zfs get -r -H -o name,property,value encryptionroot,keystatus "$ds" 2>/dev/null)
+    if [[ -z $notblind ]]; then
+      report ok "received data is blind"
+    else
+      report FAIL "received data is not blind:$notblind"
+    fi
+  done
+
+  echo
+  if [[ $selftest_rc -eq 0 ]]; then
+    echo "core-backup selftest: ok"
+  else
+    echo "core-backup selftest: problems above" >&2
+  fi
+  return "$selftest_rc"
+}
+
 cmd=${1:-help}
 [[ $# -gt 0 ]] && shift
 case $cmd in
@@ -250,6 +375,7 @@ case $cmd in
   accept) cmd_accept "$@" ;;
   list) cmd_list "$@" ;;
   revoke) cmd_revoke "$@" ;;
+  selftest) cmd_selftest "$@" ;;
   setup) cmd_setup "$@" ;;
   users) cmd_users "$@" ;;
   key) cmd_key "$@" ;;
